@@ -22,7 +22,7 @@ Mihomomo 保留 Smart 代理选择与元数据，增加本地 SQLite 流量历�
 
 ## 维护与发布
 
-源码和发布位于 `fansion314/momo` 的 `mihomomo` 分支。初始包版本为 `0.1.0-1`，标签为 `mihomomo-v0.1.0-1`。CI 在 Arch 中以普通用户执行检查、构建、安装和能力验证，然后签名软件包并发布配方包。发布需要仓库的 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
+源码和发布位于 `fansion314/momo` 的 `mihomomo` 分支。包版本为 `0.1.0-2`，标签为 `mihomomo-v0.1.0-2`。CI 在 Arch 中以普通用户执行检查、构建、安装和能力验证，然后签名软件包并发布配方包。发布需要仓库的 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
 
 分支历史仅保留一条上游快照基线和后续维护提交，上游来源记录在 `UPSTREAM.json`。更新时在干净工作区 fetch 对应上游分支，生成 `UPSTREAM.json` 所记提交到新上游提交的完整二进制补丁，以 `git apply --3way --index` 应用，审阅冲突并运行验证，更新来源记录后创建新的维护提交。不要直接 merge 上游分支或推送上游 refs，以免重新引入旧历史；不要恢复上游多平台发布工作流。
 

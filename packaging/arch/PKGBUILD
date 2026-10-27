@@ -1,6 +1,8 @@
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+
 pkgname=mihomomo
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Mihomo-based proxy core for Clash Momo'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'
@@ -10,6 +12,7 @@ makedepends=('git' 'go')
 install=mihomomo.install
 source=("git+https://github.com/fansion314/momo.git#commit=@COMMIT@" 'mihomomo.install')
 sha256sums=('SKIP' '@INSTALL_SHA@')
+options=('!debug' '!strip')
 
 build() {
   cd "$srcdir/momo"
