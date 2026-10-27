@@ -66,7 +66,8 @@ const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs, timezone }) =>
           },
           borderColor: 'rgba(34,197,94,0.8)',
           borderWidth: 1.5,
-          pointRadius: 0,
+          pointRadius: data.length === 1 ? 3 : 0,
+          pointHoverRadius: data.length === 1 ? 5 : undefined,
           tension: 0
         },
         {
@@ -83,7 +84,8 @@ const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs, timezone }) =>
           },
           borderColor: 'rgba(59,130,246,0.8)',
           borderWidth: 1.5,
-          pointRadius: 0,
+          pointRadius: data.length === 1 ? 3 : 0,
+          pointHoverRadius: data.length === 1 ? 5 : undefined,
           tension: 0
         }
       ]
@@ -109,6 +111,7 @@ const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs, timezone }) =>
     },
     scales: {
       x: {
+        offset: data.length === 1,
         ticks: {
           maxTicksLimit: 8,
           maxRotation: 0,
