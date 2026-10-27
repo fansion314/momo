@@ -15,6 +15,9 @@ mkdir -m 700 /tmp/momo-gnupg
 GNUPGHOME=/tmp/momo-gnupg gpg --batch --import /tmp/fansionia.asc
 GNUPGHOME=/tmp/momo-gnupg gpg --batch --with-colons --fingerprint | grep -F '338AEAB64ECF2EF69AAF3EEFDF31748072E5B972'
 GNUPGHOME=/tmp/momo-gnupg gpg --batch --status-fd 1 --verify /tmp/mihomomo.pkg.tar.zst.sig /tmp/mihomomo.pkg.tar.zst | grep -E "^\[GNUPG:\] VALIDSIG .* 338AEAB64ECF2EF69AAF3EEFDF31748072E5B972$"
+pacman-key --init
+pacman-key --add /tmp/fansionia.asc
+pacman-key --lsign-key 338AEAB64ECF2EF69AAF3EEFDF31748072E5B972
 pacman -U --noconfirm /tmp/mihomomo.pkg.tar.zst
 chown -R builder:builder /tmp/recipe /tmp/build-output
 runuser -u builder -- bash -c 'cd /tmp/recipe && makepkg --syncdeps --noconfirm --cleanbuild && makepkg --printsrcinfo > .SRCINFO'
