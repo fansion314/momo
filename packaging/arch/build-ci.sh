@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
 root=$1
 commit=$2
 mkdir -p /tmp/recipe /tmp/build-output
@@ -7,8 +8,8 @@ cp "$root"/packaging/arch/{PKGBUILD,clash-momo,clash-momo.desktop} /tmp/recipe/
 cd /tmp/recipe
 sed -i "s/@COMMIT@/$commit/" PKGBUILD
 sed -i "s/@LAUNCHER_SHA@/$(sha256sum clash-momo | cut -d' ' -f1)/;s/@DESKTOP_SHA@/$(sha256sum clash-momo.desktop | cut -d' ' -f1)/" PKGBUILD
-curl -fL -o /tmp/mihomomo.pkg.tar.zst https://github.com/fansion314/momo/releases/download/mihomomo-v0.1.0-1/mihomomo-0.1.0-1-x86_64.pkg.tar.zst
-curl -fL -o /tmp/mihomomo.pkg.tar.zst.sig https://github.com/fansion314/momo/releases/download/mihomomo-v0.1.0-1/mihomomo-0.1.0-1-x86_64.pkg.tar.zst.sig
+curl -fL -o /tmp/mihomomo.pkg.tar.zst https://github.com/fansion314/momo/releases/download/mihomomo-v0.1.0-2/mihomomo-0.1.0-2-x86_64.pkg.tar.zst
+curl -fL -o /tmp/mihomomo.pkg.tar.zst.sig https://github.com/fansion314/momo/releases/download/mihomomo-v0.1.0-2/mihomomo-0.1.0-2-x86_64.pkg.tar.zst.sig
 curl -fL -o /tmp/fansionia.asc https://raw.githubusercontent.com/fansion314/packages/main/arch/keys/fansionia.asc
 mkdir -m 700 /tmp/momo-gnupg
 GNUPGHOME=/tmp/momo-gnupg gpg --batch --import /tmp/fansionia.asc
@@ -17,10 +18,14 @@ GNUPGHOME=/tmp/momo-gnupg gpg --batch --status-fd 1 --verify /tmp/mihomomo.pkg.t
 pacman -U --noconfirm /tmp/mihomomo.pkg.tar.zst
 chown -R builder:builder /tmp/recipe /tmp/build-output
 runuser -u builder -- bash -c 'cd /tmp/recipe && makepkg --syncdeps --noconfirm --cleanbuild && makepkg --printsrcinfo > .SRCINFO'
-package=$(find /tmp/recipe -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
-test -n "$package"
-tar -xOf "$package" .PKGINFO | grep -Fx 'pkgname = clash-momo'
-tar -xOf "$package" .PKGINFO | grep -Fx 'pkgver = 0.1.0-1'
+pkgname=$(sed -n 's/^pkgname=//p' PKGBUILD)
+pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
+pkgrel=$(sed -n 's/^pkgrel=//p' PKGBUILD)
+mapfile -t packages < <(find /tmp/recipe -maxdepth 1 -type f -name '*.pkg.tar.zst' -print)
+package="/tmp/recipe/${pkgname}-${pkgver}-${pkgrel}-x86_64.pkg.tar.zst"
+[[ ${#packages[@]} == 1 && ${packages[0]} == "$package" && -f $package ]]
+tar -xOf "$package" .PKGINFO | grep -Fx "pkgname = $pkgname"
+tar -xOf "$package" .PKGINFO | grep -Fx "pkgver = $pkgver-$pkgrel"
 tar -xOf "$package" .PKGINFO | grep -Fx 'arch = x86_64'
 pacman -U --noconfirm "$package"
 getcap /usr/bin/mihomomo | grep -F 'cap_net_bind_service,cap_net_admin,cap_net_raw=ep'

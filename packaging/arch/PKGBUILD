@@ -1,3 +1,5 @@
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+
 pkgname=clash-momo
 pkgver=0.1.0
 pkgrel=1
@@ -9,7 +11,7 @@ depends=('electron' 'mihomomo>=0.1.0' 'gtk3' 'libnotify' 'libsecret' 'xdg-utils'
 makedepends=('git' 'nodejs' 'pnpm' 'unzip')
 source=("git+https://github.com/fansion314/momo.git#commit=@COMMIT@" 'clash-momo' 'clash-momo.desktop')
 sha256sums=('SKIP' '@LAUNCHER_SHA@' '@DESKTOP_SHA@')
-options=('!strip')
+options=('!strip' '!debug')
 
 build() {
   cd "$srcdir/momo"
