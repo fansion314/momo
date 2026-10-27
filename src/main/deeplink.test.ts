@@ -36,23 +36,26 @@ beforeEach(() => {
 
 describe('findDeepLink', () => {
   it('finds a supported scheme anywhere in the command line', () => {
-    expect(findDeepLink(['app', '--flag', 'clash://install-config?url=x'])).toBe(
-      'clash://install-config?url=x'
+    expect(findDeepLink(['app', '--flag', 'clash-momo://install-config?url=x'])).toBe(
+      'clash-momo://install-config?url=x'
     )
-    expect(findDeepLink(['app', 'MIHOMO://install-plugin?url=x'])).toBe(
-      'MIHOMO://install-plugin?url=x'
+    expect(findDeepLink(['app', 'CLASH-MOMO://install-plugin?url=x'])).toBe(
+      'CLASH-MOMO://install-plugin?url=x'
     )
   })
 
   it('ignores unrelated arguments', () => {
     expect(findDeepLink(['app', '--flag'])).toBeUndefined()
+    expect(
+      findDeepLink(['app', 'mihomo://install-config?url=x', 'clash://install-config?url=x'])
+    ).toBeUndefined()
   })
 })
 
 describe('install-plugin deep link', () => {
   it('downloads, installs and starts login', async () => {
     const remoteUrl = 'https://provider.example/app.cpx?channel=stable'
-    await handleDeepLink(`clash://install-plugin?url=${encodeURIComponent(remoteUrl)}`)
+    await handleDeepLink(`clash-momo://install-plugin?url=${encodeURIComponent(remoteUrl)}`)
 
     expect(installRemotePlugin).toHaveBeenCalledWith(remoteUrl)
     expect(loginPlugin).toHaveBeenCalledWith('plugin-id')
@@ -62,7 +65,7 @@ describe('install-plugin deep link', () => {
 
   it('reports an install failure and does not start login', async () => {
     installRemotePlugin.mockRejectedValue(new Error('bad descriptor'))
-    await handleDeepLink('mihomo://install-plugin?url=https%3A%2F%2Fprovider.example%2Fapp.cpx')
+    await handleDeepLink('clash-momo://install-plugin?url=https%3A%2F%2Fprovider.example%2Fapp.cpx')
 
     expect(loginPlugin).not.toHaveBeenCalled()
     expect(safeShowErrorBox).toHaveBeenCalledWith(
@@ -73,7 +76,7 @@ describe('install-plugin deep link', () => {
 
   it('keeps the installed plugin when login fails and reports the login error', async () => {
     loginPlugin.mockRejectedValue(new Error('PLUGIN_LOGIN_FAILED'))
-    await handleDeepLink('clash://install-plugin?url=https%3A%2F%2Fprovider.example%2Fapp.cpx')
+    await handleDeepLink('clash-momo://install-plugin?url=https%3A%2F%2Fprovider.example%2Fapp.cpx')
 
     expect(installRemotePlugin).toHaveBeenCalledOnce()
     expect(notificationShow).toHaveBeenCalledOnce()
@@ -84,7 +87,7 @@ describe('install-plugin deep link', () => {
   })
 
   it('requires the url parameter', async () => {
-    await handleDeepLink('clash://install-plugin')
+    await handleDeepLink('clash-momo://install-plugin')
     expect(installRemotePlugin).not.toHaveBeenCalled()
     expect(safeShowErrorBox).toHaveBeenCalledWith(
       'plugins.installFailed',

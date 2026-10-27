@@ -1,56 +1,69 @@
+import { Button } from '@heroui/react'
 import { calcTraffic } from '@renderer/utils/calc'
-import type { AggregatedData } from '@renderer/utils/dataUsage'
-import React from 'react'
+import { dimensionLabel, dimensionValue } from '@renderer/utils/traffic-history'
+import { useTranslation } from 'react-i18next'
+import type { HistoryDimension, HistoryGroup } from '../../../../shared/traffic-history'
 
 interface Props {
-  title: string
-  data: AggregatedData[]
-  selectedRow: string | null
-  onSelect: (label: string) => void
+  data: HistoryGroup[]
+  dimension: HistoryDimension
+  onSelect: (dimension: HistoryDimension, value: string) => void
 }
 
-const TrafficRankings: React.FC<Props> = ({ title, data, selectedRow, onSelect }) => {
+export default function TrafficRankings({ data, dimension, onSelect }: Props): React.JSX.Element {
+  const { t } = useTranslation()
+  const maximum = Math.max(...data.map((row) => row.upload + row.download), 1)
   return (
-    <div className="flex h-full w-full flex-col">
-      <h3 className="mb-3 text-sm font-semibold text-foreground">{title}</h3>
-      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
-        {data.length === 0 ? (
-          <div className="py-8 text-center text-sm text-foreground/50">—</div>
-        ) : (
-          data.map((row) => (
-            <div
-              key={row.label}
-              onClick={() => onSelect(row.label)}
-              className={`mb-1.5 flex cursor-pointer flex-col gap-0.5 rounded-lg p-2 transition-colors hover:bg-foreground/5 ${
-                selectedRow === row.label ? 'bg-primary/10' : ''
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className={`min-w-0 flex-1 truncate font-mono text-xs font-medium ${
-                    selectedRow === row.label ? 'text-primary' : 'text-foreground'
-                  }`}
-                >
-                  {row.label}
-                </span>
-                <span
-                  className={`shrink-0 text-xs font-bold ${
-                    selectedRow === row.label ? 'text-primary' : 'text-foreground/80'
-                  }`}
-                >
-                  {calcTraffic(row.total)}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-[10px] font-bold text-foreground/50">
-                <span>↑ {calcTraffic(row.upload)}</span>
-                <span>↓ {calcTraffic(row.download)}</span>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+    <div className="overflow-auto max-h-96 custom-scrollbar">
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-content1 text-foreground/60">
+          <tr>
+            <th className="p-2 text-left">{t(`traffic.history.dimension.${dimension}`)}</th>
+            <th className="p-2 text-right">{t('traffic.upload')}</th>
+            <th className="p-2 text-right">{t('traffic.download')}</th>
+            <th className="p-2 text-right">{t('traffic.history.newConnections')}</th>
+            <th className="p-2 text-right">{t('traffic.total')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row) => {
+            const value = dimensionValue(row, dimension)
+            return (
+              <tr key={value} className="border-t border-foreground/5 hover:bg-foreground/5">
+                <td className="p-2 min-w-40 max-w-96">
+                  <Button
+                    variant="light"
+                    size="sm"
+                    className="h-auto min-h-8 w-full justify-start px-1 text-left whitespace-normal break-all"
+                    onPress={() => onSelect(dimension, value)}
+                  >
+                    {dimensionLabel(value, dimension) || t('traffic.history.unknown')}
+                  </Button>
+                  <div className="h-0.5 bg-primary/15 rounded overflow-hidden" aria-hidden="true">
+                    <div
+                      className="h-full bg-primary/65"
+                      style={{ width: `${(100 * (row.upload + row.download)) / maximum}%` }}
+                    />
+                  </div>
+                </td>
+                <td className="p-2 text-right whitespace-nowrap tabular-nums">
+                  {calcTraffic(row.upload)}
+                </td>
+                <td className="p-2 text-right whitespace-nowrap tabular-nums">
+                  {calcTraffic(row.download)}
+                </td>
+                <td className="p-2 text-right tabular-nums">{row.connections.toLocaleString()}</td>
+                <td className="p-2 text-right whitespace-nowrap tabular-nums font-medium">
+                  {calcTraffic(row.upload + row.download)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {!data.length && (
+        <p className="p-8 text-center text-sm text-foreground/50">{t('traffic.history.empty')}</p>
+      )}
     </div>
   )
 }
-
-export default TrafficRankings

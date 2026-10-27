@@ -23,7 +23,7 @@ const Resources: React.FC = () => {
       title={t('sider.cards.resources')}
       header={simple ? <EditModeMenu enabled={editing} onChange={setEditing} /> : undefined}
     >
-      {core === 'mihomo-smart' && <SmartModel />}
+      {core === 'mihomomo' && <SmartModel />}
       <GeoData />
       {!simple && <ProxyProvider />}
       <RuleProvider editing={simple && editing} />

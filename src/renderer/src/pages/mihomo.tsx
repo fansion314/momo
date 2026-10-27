@@ -1,23 +1,6 @@
-import {
-  Button,
-  Divider,
-  Input,
-  Select,
-  SelectItem,
-  Switch,
-  Tooltip,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  useDisclosure,
-  Spinner,
-  Chip
-} from '@heroui/react'
+import { Button, Divider, Input, Select, SelectItem, Switch, Tooltip } from '@heroui/react'
 import BasePage from '@renderer/components/base/base-page'
 import { toast } from '@renderer/components/base/toast'
-import { showError } from '@renderer/utils/error-display'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { isValidListenAddress, getError, isValid } from '@renderer/utils/validate'
@@ -26,23 +9,18 @@ import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-c
 import { platform } from '@renderer/utils/init'
 import { FaNetworkWired } from 'react-icons/fa'
 import {
-  IoMdCloudDownload,
   IoMdInformationCircleOutline,
+  IoMdCloudDownload,
   IoMdRefresh,
   IoMdShuffle,
   IoMdEye,
   IoMdEyeOff
 } from 'react-icons/io'
-import PubSub from 'pubsub-js'
 import {
-  mihomoUpgrade,
   mihomoHotReloadConfig,
   restartCore,
   startSubStoreBackendServer,
   triggerSysProxy,
-  fetchMihomoTags,
-  installSpecificMihomoCore,
-  clearMihomoVersionCache,
   mihomoUpgradeUI
 } from '@renderer/utils/ipc'
 import React, { useState, useEffect } from 'react'
@@ -54,13 +32,6 @@ import {
   DEFAULT_MIHOMO_PORTS,
   DEFAULT_MIHOMO_SKIP_AUTH_PREFIXES
 } from '../../../shared/appConfig'
-
-const CoreMap = {
-  mihomo: 'mihomo.stableVersion',
-  'mihomo-alpha': 'mihomo.alphaVersion',
-  'mihomo-smart': 'mihomo.smartVersion',
-  'mihomo-specific': 'mihomo.specificVersion'
-}
 
 interface WebUIPanelOption {
   name: string
@@ -96,9 +67,6 @@ const Mihomo: React.FC = () => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
   const {
-    core = 'mihomo',
-    specificVersion,
-    enableSmartCore = false,
     enableSmartOverride = true,
     smartCoreUseLightGBM = false,
     smartCoreCollectData = false,
@@ -168,16 +136,7 @@ const Mihomo: React.FC = () => {
   const [authenticationInput, setAuthenticationInput] = useState(authentication)
   const [skipAuthPrefixesInput, setSkipAuthPrefixesInput] = useState(skipAuthPrefixes)
   const [lgbmUrlInput, setLgbmUrlInput] = useState(lgbmUrl)
-  const [upgrading, setUpgrading] = useState(false)
   const [lanOpen, setLanOpen] = useState(false)
-  const { isOpen, onOpen, onClose } = useDisclosure()
-  const [tags, setTags] = useState<{ name: string; zipball_url: string; tarball_url: string }[]>([])
-  const [loadingTags, setLoadingTags] = useState(false)
-  const [selectedTag, setSelectedTag] = useState(specificVersion || '')
-  const [installing, setInstalling] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
-
   // 生成随机端口 (范围 1024-65535)
   const generateRandomPort = () => Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
 
@@ -253,141 +212,52 @@ const Mihomo: React.FC = () => {
     }
   }
 
-  const handleConfigChangeWithRestart = async (key: string, value: unknown) => {
-    try {
-      await patchAppConfig({ [key]: value })
-      await restartCore()
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : String(e)
-      console.error('Core restart failed:', errorMessage)
-
-      await showError(errorMessage, t('mihomo.error.profileCheckFailed'))
-    } finally {
-      PubSub.publish('mihomo-core-changed')
-    }
-  }
-
-  // 获取 GitHub 标签列表（带缓存）
-  const fetchTags = async (forceRefresh = false) => {
-    setLoadingTags(true)
-    try {
-      const data = await fetchMihomoTags(forceRefresh)
-      setTags(Array.isArray(data) ? data : [])
-    } catch (error: unknown) {
-      console.error('Failed to fetch tags:', String(error))
-      setTags([])
-      toast.error(t('mihomo.error.fetchTagsFailed'))
-    } finally {
-      setLoadingTags(false)
-    }
-  }
-
-  // 安装特定版本的核心
-  const installSpecificCore = async () => {
-    if (!selectedTag) return
-
-    setInstalling(true)
-    try {
-      // 下载并安装特定版本的核心
-      await installSpecificMihomoCore(selectedTag)
-
-      // 更新应用配置
-      await patchAppConfig({
-        core: 'mihomo-specific',
-        specificVersion: selectedTag
-      })
-
-      // 重启核心
-      await restartCore()
-
-      // 关闭模态框
-      onClose()
-
-      // 通知用户
-      new Notification(t('mihomo.coreUpgradeSuccess'))
-    } catch (error) {
-      console.error('Failed to install specific core:', error)
-      toast.error(t('mihomo.error.installCoreFailed'))
-    } finally {
-      setInstalling(false)
-    }
-  }
-
-  // 刷新标签列表
-  const refreshTags = async () => {
-    setRefreshing(true)
-    try {
-      // 清除缓存并强制刷新
-      await clearMihomoVersionCache()
-      await fetchTags(true)
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
-  // 打开模态框时获取标签
-  const handleOpenModal = async () => {
-    onOpen()
-    // 先显示缓存的标签（如果有）
-    if (tags.length === 0) {
-      await fetchTags(false) // 使用缓存
-    }
-
-    // 在后台检查更新
-    setTimeout(() => {
-      fetchTags(true) // 强制刷新
-    }, 100)
-  }
-
-  // 过滤标签
-  const filteredTags = tags.filter((tag) =>
-    tag.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  // 当模态框打开时，确保选中当前版本
-  useEffect(() => {
-    if (isOpen && specificVersion) {
-      setSelectedTag(specificVersion)
-    }
-  }, [isOpen, specificVersion])
-
   return (
     <>
       {lanOpen && <InterfaceModal onClose={() => setLanOpen(false)} />}
       <BasePage title={t('mihomo.title')}>
         {/* Smart 内核设置 */}
         <SettingCard>
-          <div
-            className={`rounded-md border p-2 transition-all duration-200 ${
-              enableSmartCore
-                ? 'border-blue-300 bg-blue-50/30 dark:border-blue-700 dark:bg-blue-950/20'
-                : 'border-gray-300 bg-gray-50/30 dark:border-gray-600 dark:bg-gray-800/20'
-            }`}
-          >
-            <SettingItem title={t('mihomo.enableSmartCore')} divider>
+          <div className="rounded-md border border-primary-200 p-2">
+            <SettingItem title={t('mihomo.systemCore')} divider>
+              <span className="text-xs text-default-500">{t('mihomo.systemCoreDescription')}</span>
+            </SettingItem>
+
+            {/* Smart 覆写开关 */}
+            <SettingItem
+              title={
+                <div className="flex items-center gap-2">
+                  <span>{t('mihomo.enableSmartOverride')}</span>
+                  <Tooltip
+                    content={t('mihomo.smartOverrideTooltip')}
+                    placement="top"
+                    className="max-w-xs"
+                  >
+                    <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
+                  </Tooltip>
+                </div>
+              }
+              divider
+            >
               <Switch
                 size="sm"
-                isSelected={enableSmartCore}
-                color={enableSmartCore ? 'primary' : 'default'}
+                isSelected={enableSmartOverride}
+                color="primary"
                 onValueChange={async (v) => {
-                  await patchAppConfig({ enableSmartCore: v })
-                  if (v && core !== 'mihomo-smart') {
-                    await handleConfigChangeWithRestart('core', 'mihomo-smart')
-                  } else if (!v && core === 'mihomo-smart') {
-                    await handleConfigChangeWithRestart('core', 'mihomo')
-                  }
+                  await patchAppConfig({ enableSmartOverride: v })
+                  await mihomoHotReloadConfig()
                 }}
               />
             </SettingItem>
 
-            {/* Smart 覆写开关 */}
-            {enableSmartCore && core === 'mihomo-smart' && (
+            {/* Smart 内核配置项 */}
+            <>
               <SettingItem
                 title={
                   <div className="flex items-center gap-2">
-                    <span>{t('mihomo.enableSmartOverride')}</span>
+                    <span>{t('mihomo.smartCoreUseLightGBM')}</span>
                     <Tooltip
-                      content={t('mihomo.smartOverrideTooltip')}
+                      content={t('mihomo.smartCoreUseLightGBMTooltip')}
                       placement="top"
                       className="max-w-xs"
                     >
@@ -395,269 +265,156 @@ const Mihomo: React.FC = () => {
                     </Tooltip>
                   </div>
                 }
-                divider={core === 'mihomo-smart'}
+                divider
               >
                 <Switch
                   size="sm"
-                  isSelected={enableSmartOverride}
                   color="primary"
+                  isSelected={smartCoreUseLightGBM}
                   onValueChange={async (v) => {
-                    await patchAppConfig({ enableSmartOverride: v })
+                    await patchAppConfig({ smartCoreUseLightGBM: v })
                     await mihomoHotReloadConfig()
                   }}
                 />
               </SettingItem>
-            )}
 
-            <SettingItem
-              title={
+              <SettingItem
+                title={
+                  <div className="flex items-center gap-2">
+                    <span>{t('mihomo.smartCoreCollectData')}</span>
+                    <Tooltip
+                      content={t('mihomo.smartCoreCollectDataTooltip')}
+                      placement="top"
+                      className="max-w-xs"
+                    >
+                      <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
+                    </Tooltip>
+                  </div>
+                }
+                divider
+              >
+                <Switch
+                  size="sm"
+                  color="primary"
+                  isSelected={smartCoreCollectData}
+                  onValueChange={async (v) => {
+                    await patchAppConfig({ smartCoreCollectData: v })
+                    await mihomoHotReloadConfig()
+                  }}
+                />
+              </SettingItem>
+
+              <SettingItem
+                title={
+                  <div className="flex items-center gap-2">
+                    <span>{t('mihomo.smartCollectorSize')}</span>
+                    <Tooltip
+                      content={t('mihomo.smartCollectorSizeTooltip')}
+                      placement="top"
+                      className="max-w-xs"
+                    >
+                      <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
+                    </Tooltip>
+                  </div>
+                }
+                divider
+              >
                 <div className="flex items-center gap-2">
-                  <span>{t('mihomo.coreVersion')}</span>
-                  {core === 'mihomo-specific' && specificVersion && (
-                    <Chip size="sm" variant="flat" color="primary">
-                      {specificVersion}
-                    </Chip>
-                  )}
-                </div>
-              }
-              actions={
-                <div className="flex gap-2">
-                  <Button
+                  <Input
                     size="sm"
-                    isIconOnly
-                    title={t('mihomo.upgradeCore')}
-                    variant="light"
-                    isLoading={upgrading}
-                    onPress={async () => {
-                      try {
-                        setUpgrading(true)
-                        await mihomoUpgrade()
-                        setTimeout(() => {
-                          PubSub.publish('mihomo-core-changed')
-                        }, 2000)
-                        if (platform !== 'win32') {
-                          new Notification(t('mihomo.coreAuthLost'), {
-                            body: t('mihomo.coreUpgradeSuccess')
-                          })
-                        }
-                      } catch (e) {
-                        if (typeof e === 'string' && e.includes('already using latest version')) {
-                          new Notification(t('mihomo.alreadyLatestVersion'))
-                        } else {
-                          toast.error(String(e))
-                        }
-                      } finally {
-                        setUpgrading(false)
+                    className="w-25"
+                    type="number"
+                    value={smartCollectorSize.toString()}
+                    onValueChange={async (v: string) => {
+                      const num = parseInt(v)
+                      if (!isNaN(num)) {
+                        await patchAppConfig({ smartCollectorSize: num })
                       }
                     }}
-                  >
-                    <IoMdCloudDownload className="text-lg" />
-                  </Button>
-                  <Button size="sm" variant="light" onPress={handleOpenModal}>
-                    {t('mihomo.selectSpecificVersion')}
-                  </Button>
+                    onBlur={async (e) => {
+                      let num = parseInt(e.target.value)
+                      if (isNaN(num)) num = 100
+                      if (num < 1) num = 1
+                      await patchAppConfig({ smartCollectorSize: num })
+                      await mihomoHotReloadConfig()
+                    }}
+                  />
+                  <span className="text-default-500">MB</span>
                 </div>
-              }
-              divider={enableSmartCore && core === 'mihomo-smart'}
-            >
-              <Select
-                classNames={{
-                  trigger: enableSmartCore
-                    ? 'data-[hover=true]:bg-blue-100 dark:data-[hover=true]:bg-blue-900/50'
-                    : 'data-[hover=true]:bg-default-200'
-                }}
-                className="w-37.5"
-                size="sm"
-                aria-label={t('mihomo.selectCoreVersion')}
-                selectedKeys={new Set([core])}
-                disallowEmptySelection={true}
-                onSelectionChange={async (v) => {
-                  const selectedCore = v.currentKey as
-                    'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
-                  // 如果切换到特定版本但没有设置 specificVersion，则打开选择模态框
-                  if (selectedCore === 'mihomo-specific' && !specificVersion) {
-                    handleOpenModal()
-                  } else {
-                    handleConfigChangeWithRestart('core', selectedCore)
-                  }
-                }}
-              >
-                <SelectItem key="mihomo">{t(CoreMap['mihomo'])}</SelectItem>
-                <SelectItem key="mihomo-alpha">{t(CoreMap['mihomo-alpha'])}</SelectItem>
-                {enableSmartCore ? (
-                  <SelectItem key="mihomo-smart">{t(CoreMap['mihomo-smart'])}</SelectItem>
-                ) : null}
-                <SelectItem key="mihomo-specific">{t(CoreMap['mihomo-specific'])}</SelectItem>
-              </Select>
-            </SettingItem>
+              </SettingItem>
 
-            {/* Smart 内核配置项 */}
-            {enableSmartCore && core === 'mihomo-smart' && (
-              <>
-                <SettingItem
-                  title={
-                    <div className="flex items-center gap-2">
-                      <span>{t('mihomo.smartCoreUseLightGBM')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartCoreUseLightGBMTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
-                    </div>
-                  }
-                  divider
-                >
-                  <Switch
-                    size="sm"
-                    color="primary"
-                    isSelected={smartCoreUseLightGBM}
-                    onValueChange={async (v) => {
-                      await patchAppConfig({ smartCoreUseLightGBM: v })
-                      await mihomoHotReloadConfig()
-                    }}
-                  />
-                </SettingItem>
-
-                <SettingItem
-                  title={
-                    <div className="flex items-center gap-2">
-                      <span>{t('mihomo.smartCoreCollectData')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartCoreCollectDataTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
-                    </div>
-                  }
-                  divider
-                >
-                  <Switch
-                    size="sm"
-                    color="primary"
-                    isSelected={smartCoreCollectData}
-                    onValueChange={async (v) => {
-                      await patchAppConfig({ smartCoreCollectData: v })
-                      await mihomoHotReloadConfig()
-                    }}
-                  />
-                </SettingItem>
-
-                <SettingItem
-                  title={
-                    <div className="flex items-center gap-2">
-                      <span>{t('mihomo.smartCollectorSize')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartCollectorSizeTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
-                    </div>
-                  }
-                  divider
-                >
+              <SettingItem
+                title={
                   <div className="flex items-center gap-2">
-                    <Input
-                      size="sm"
-                      className="w-25"
-                      type="number"
-                      value={smartCollectorSize.toString()}
-                      onValueChange={async (v: string) => {
-                        const num = parseInt(v)
-                        if (!isNaN(num)) {
-                          await patchAppConfig({ smartCollectorSize: num })
-                        }
-                      }}
-                      onBlur={async (e) => {
-                        let num = parseInt(e.target.value)
-                        if (isNaN(num)) num = 100
-                        if (num < 1) num = 1
-                        await patchAppConfig({ smartCollectorSize: num })
-                        await mihomoHotReloadConfig()
-                      }}
-                    />
-                    <span className="text-default-500">MB</span>
+                    <span>{t('mihomo.smartLgbmAutoUpdate')}</span>
+                    <Tooltip
+                      content={t('mihomo.smartLgbmAutoUpdateTooltip')}
+                      placement="top"
+                      className="max-w-xs"
+                    >
+                      <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
+                    </Tooltip>
                   </div>
-                </SettingItem>
+                }
+                divider
+              >
+                <Switch
+                  size="sm"
+                  color="primary"
+                  isSelected={lgbmAutoUpdate}
+                  onValueChange={(v) => {
+                    patchControledMihomoConfig({ 'lgbm-auto-update': v })
+                  }}
+                />
+              </SettingItem>
 
-                <SettingItem
-                  title={
-                    <div className="flex items-center gap-2">
-                      <span>{t('mihomo.smartLgbmAutoUpdate')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartLgbmAutoUpdateTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
-                    </div>
-                  }
-                  divider
-                >
-                  <Switch
+              {lgbmAutoUpdate && (
+                <SettingItem title={t('mihomo.smartLgbmUpdateInterval')} divider>
+                  <Input
                     size="sm"
-                    color="primary"
-                    isSelected={lgbmAutoUpdate}
+                    className="w-25"
+                    type="number"
+                    value={lgbmUpdateInterval.toString()}
                     onValueChange={(v) => {
-                      patchControledMihomoConfig({ 'lgbm-auto-update': v })
+                      const num = parseInt(v)
+                      if (Number.isNaN(num)) return
+                      patchControledMihomoConfig({ 'lgbm-update-interval': num })
                     }}
                   />
                 </SettingItem>
+              )}
 
-                {lgbmAutoUpdate && (
-                  <SettingItem title={t('mihomo.smartLgbmUpdateInterval')} divider>
-                    <Input
-                      size="sm"
-                      className="w-25"
-                      type="number"
-                      value={lgbmUpdateInterval.toString()}
-                      onValueChange={(v) => {
-                        const num = parseInt(v)
-                        if (Number.isNaN(num)) return
-                        patchControledMihomoConfig({ 'lgbm-update-interval': num })
-                      }}
-                    />
-                  </SettingItem>
-                )}
-
-                <SettingItem
-                  title={
-                    <div className="flex items-center gap-2">
-                      <span>{t('mihomo.smartLgbmUrl')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartLgbmUrlTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
-                    </div>
-                  }
-                >
-                  <div className="flex w-[60%]">
-                    {lgbmUrlInput !== lgbmUrl && (
-                      <Button
-                        size="sm"
-                        color="primary"
-                        className="mr-2"
-                        onPress={() => {
-                          patchControledMihomoConfig({ 'lgbm-url': lgbmUrlInput })
-                        }}
-                      >
-                        {t('common.confirm')}
-                      </Button>
-                    )}
-                    <Input size="sm" value={lgbmUrlInput} onValueChange={setLgbmUrlInput} />
+              <SettingItem
+                title={
+                  <div className="flex items-center gap-2">
+                    <span>{t('mihomo.smartLgbmUrl')}</span>
+                    <Tooltip
+                      content={t('mihomo.smartLgbmUrlTooltip')}
+                      placement="top"
+                      className="max-w-xs"
+                    >
+                      <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
+                    </Tooltip>
                   </div>
-                </SettingItem>
-              </>
-            )}
+                }
+              >
+                <div className="flex w-[60%]">
+                  {lgbmUrlInput !== lgbmUrl && (
+                    <Button
+                      size="sm"
+                      color="primary"
+                      className="mr-2"
+                      onPress={() => {
+                        patchControledMihomoConfig({ 'lgbm-url': lgbmUrlInput })
+                      }}
+                    >
+                      {t('common.confirm')}
+                    </Button>
+                  )}
+                  <Input size="sm" value={lgbmUrlInput} onValueChange={setLgbmUrlInput} />
+                </div>
+              </SettingItem>
+            </>
           </div>
         </SettingCard>
 
@@ -1542,83 +1299,6 @@ const Mihomo: React.FC = () => {
           </SettingItem>
         </SettingCard>
       </BasePage>
-
-      {/* 自定义版本选择模态框 */}
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        size="5xl"
-        backdrop="blur"
-        classNames={{ backdrop: 'top-[48px]' }}
-        hideCloseButton
-        scrollBehavior="inside"
-      >
-        <ModalContent className="h-full w-[calc(100%-100px)]">
-          <ModalHeader className="flex app-drag">{t('mihomo.selectSpecificVersion')}</ModalHeader>
-          <ModalBody>
-            <div className="flex flex-col gap-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder={t('mihomo.searchVersion')}
-                  value={searchTerm}
-                  onValueChange={setSearchTerm}
-                  className="flex-1"
-                />
-                <Button
-                  isIconOnly
-                  variant="light"
-                  onPress={refreshTags}
-                  isLoading={refreshing}
-                  title={t('common.refresh')}
-                >
-                  <IoMdRefresh className="text-lg" />
-                </Button>
-              </div>
-              {loadingTags ? (
-                <div className="flex justify-center items-center h-40">
-                  <Spinner size="lg" />
-                </div>
-              ) : (
-                <div className="h-full overflow-y-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {filteredTags.map((tag) => (
-                      <div
-                        key={tag.name}
-                        className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                          selectedTag === tag.name
-                            ? 'bg-primary/20 border-2 border-primary'
-                            : 'bg-default-100 hover:bg-default-200'
-                        }`}
-                        onClick={() => setSelectedTag(tag.name)}
-                      >
-                        <div className="font-medium">{tag.name}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {filteredTags.length === 0 && (
-                    <div className="text-center py-8 text-default-500">
-                      {t('mihomo.noVersionsFound')}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              color="primary"
-              isLoading={installing}
-              isDisabled={!selectedTag || installing}
-              onPress={installSpecificCore}
-            >
-              {t('mihomo.installVersion')}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
     </>
   )
 }

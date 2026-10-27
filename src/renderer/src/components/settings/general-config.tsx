@@ -41,6 +41,7 @@ import { useTheme } from 'next-themes'
 import { IoIosArrowDown, IoIosHelpCircle, IoMdCloudDownload } from 'react-icons/io'
 import { MdEditDocument } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
+import { parseZoomFactor } from '../../../../shared/appConfig'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import BaseConfirmModal from '../base/base-confirm-modal'
@@ -97,17 +98,15 @@ const GeneralConfig: React.FC = () => {
     lockSiderCards = false,
     autoQuitWithoutCore = false,
     autoQuitWithoutCoreDelay = 60,
-    autoQuitWithoutCoreMode = 'core',
     customTheme = 'default.css',
     envType = [platform === 'win32' ? 'powershell' : 'bash'],
-    autoCheckUpdate = true,
     autoUpdateProfileOnStart = true,
-    silentUpdate = true,
     githubProxy = 'auto',
     appTheme = 'system',
     language = 'zh-CN',
     triggerMainWindowBehavior = 'show',
     hideConnectionCardWave = false,
+    zoomFactor = 1,
     disableAppLog = false
   } = appConfig || {}
 
@@ -356,24 +355,6 @@ const GeneralConfig: React.FC = () => {
             }}
           />
         </SettingItem>
-        <SettingItem title={t('settings.autoCheckUpdate')} divider>
-          <Switch
-            size="sm"
-            isSelected={autoCheckUpdate}
-            onValueChange={(v) => {
-              patchAppConfig({ autoCheckUpdate: v })
-            }}
-          />
-        </SettingItem>
-        <SettingItem title={t('settings.silentUpdate')} divider>
-          <Switch
-            size="sm"
-            isSelected={silentUpdate}
-            onValueChange={(v) => {
-              patchAppConfig({ silentUpdate: v })
-            }}
-          />
-        </SettingItem>
         <SettingItem title={t('settings.githubProxy')} divider>
           <Select
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
@@ -439,23 +420,6 @@ const GeneralConfig: React.FC = () => {
         </SettingItem>
         {autoQuitWithoutCore && (
           <>
-            <SettingItem title={t('settings.autoQuitWithoutCoreMode')} divider>
-              <Tabs
-                size="sm"
-                color="primary"
-                selectedKey={autoQuitWithoutCoreMode}
-                onSelectionChange={async (key) => {
-                  const mode = key as 'core' | 'tray'
-                  await patchAppConfig({ autoQuitWithoutCoreMode: mode })
-                  if (mode === 'core' && autoQuitWithoutCoreDelay < 5) {
-                    await patchAppConfig({ autoQuitWithoutCoreDelay: 5 })
-                  }
-                }}
-              >
-                <Tab key="core" title={t('settings.autoQuitWithoutCoreModeCore')} />
-                <Tab key="tray" title={t('settings.autoQuitWithoutCoreModeTray')} />
-              </Tabs>
-            </SettingItem>
             <SettingItem title={t('settings.autoQuitWithoutCoreDelay')} divider>
               <div className="flex items-center gap-2">
                 <Input
@@ -470,7 +434,7 @@ const GeneralConfig: React.FC = () => {
                     }
                   }}
                   onBlur={async (e) => {
-                    const minDelay = autoQuitWithoutCoreMode === 'core' ? 5 : 0
+                    const minDelay = 0
                     let num = parseInt(e.target.value)
                     if (isNaN(num)) num = minDelay
                     if (num < minDelay) num = minDelay
@@ -753,6 +717,40 @@ const GeneralConfig: React.FC = () => {
           </>
         )}
 
+        <SettingItem title={t('settings.zoomFactor')} divider>
+          <Input
+            key={zoomFactor}
+            size="sm"
+            className="w-48"
+            aria-label={t('settings.zoomFactor')}
+            description={t('settings.zoomFactorHelp')}
+            defaultValue={`${Math.round(zoomFactor * 100)}%`}
+            onBlur={async (event) => {
+              const value = parseZoomFactor(event.target.value)
+              if (value === null) {
+                event.target.value = `${Math.round(zoomFactor * 100)}%`
+                return
+              }
+              await patchAppConfig({ zoomFactor: value })
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                event.preventDefault()
+                const current = parseZoomFactor(event.currentTarget.value) ?? zoomFactor
+                const next = Math.min(
+                  2,
+                  Math.max(
+                    0.5,
+                    Math.round((current + (event.key === 'ArrowUp' ? 0.01 : -0.01)) * 100) / 100
+                  )
+                )
+                event.currentTarget.value = `${Math.round(next * 100)}%`
+                void patchAppConfig({ zoomFactor: next })
+              }
+            }}
+          />
+        </SettingItem>
         <SettingItem title={t('settings.useWindowFrame')} divider>
           <Switch
             size="sm"

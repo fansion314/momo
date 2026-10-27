@@ -285,7 +285,7 @@ interface ISmartModelStatus {
 interface IAppConfig {
   operationMode?: 'standard' | 'simple'
   modeSelected?: boolean
-  core: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
+  core: 'mihomomo'
   specificVersion?: string
   enableSmartCore: boolean
   enableSmartOverride: boolean
@@ -343,9 +343,11 @@ interface IAppConfig {
   subStoreBackendSyncCron?: string
   subStoreBackendDownloadCron?: string
   subStoreBackendUploadCron?: string
+  zoomFactor?: number
+  trafficHistoryRetentionDays?: number
   autoQuitWithoutCore?: boolean
   autoQuitWithoutCoreDelay?: number
-  autoQuitWithoutCoreMode?: 'core' | 'tray'
+  autoQuitWithoutCoreMode?: 'tray'
   useCustomSubStore?: boolean
   useProxyInSubStore?: boolean
   pluginUseProxy?: boolean // 新装插件默认路由模式：true → proxy（安全保证降级），false → auto

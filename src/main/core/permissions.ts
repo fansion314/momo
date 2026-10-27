@@ -1,11 +1,9 @@
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
-import { stat } from 'fs/promises'
 import { existsSync } from 'fs'
-import path from 'path'
 import { app, dialog, ipcMain } from 'electron'
-import { getAppConfig, getControledMihomoConfig, patchControledMihomoConfig } from '../config'
-import { mihomoCorePath, mihomoCoreDir } from '../utils/dirs'
+import { getControledMihomoConfig, patchControledMihomoConfig } from '../config'
+import { mihomoCorePath } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import { checkAutoRun, enableAutoRun } from '../sys/autoRun'
 import i18next from '../../shared/i18n'
@@ -15,7 +13,7 @@ const execPromise = promisify(exec)
 const execFilePromise = promisify(execFile)
 
 // 内核名称白名单
-const ALLOWED_CORES = ['mihomo', 'mihomo-alpha', 'mihomo-smart'] as const
+const ALLOWED_CORES = ['mihomomo'] as const
 type AllowedCore = (typeof ALLOWED_CORES)[number]
 type StopCoreBeforeAdminRestart = (force?: boolean) => Promise<void>
 
@@ -30,25 +28,27 @@ export function isValidCoreName(core: string): core is AllowedCore {
 }
 
 export function validateCorePath(corePath: string): void {
-  if (corePath.includes('..')) {
-    throw new Error('Invalid core path: directory traversal detected')
-  }
-
-  const dangerousChars = /[;&|`$(){}[\]<>'"\\]/
-  if (dangerousChars.test(path.basename(corePath))) {
-    throw new Error('Invalid core path: contains dangerous characters')
-  }
-
-  const normalizedPath = path.normalize(path.resolve(corePath))
-  const expectedDir = path.normalize(path.resolve(mihomoCoreDir()))
-
-  if (!normalizedPath.startsWith(expectedDir + path.sep) && normalizedPath !== expectedDir) {
-    throw new Error('Invalid core path: not in expected directory')
+  if (corePath !== '/usr/bin/mihomomo') {
+    throw new Error('Invalid core path: only /usr/bin/mihomomo is supported')
   }
 }
 
-function shellEscape(arg: string): string {
-  return "'" + arg.replace(/'/g, "'\\''") + "'"
+export const KERNEL_PERMISSIONS_MESSAGE =
+  'The mihomomo package must install cap_net_admin, cap_net_raw and cap_net_bind_service on /usr/bin/mihomomo. Reinstall it with sudo pacman -S mihomomo. Clash Momo must run as your normal user.'
+
+export function hasLinuxTunCapabilities(output: string): boolean {
+  const prefix = '/usr/bin/mihomomo '
+  const line = output.trim()
+  if (!line.startsWith(prefix)) return false
+  const capabilities = new Set<string>()
+  for (const group of line.slice(prefix.length).trim().split(/\s+/)) {
+    const match = group.match(/^((?:cap_[a-z_]+)(?:,cap_[a-z_]+)*)=([eip]+)$/)
+    if (!match || !match[2].includes('e') || !match[2].includes('p')) continue
+    for (const name of match[1].split(',')) capabilities.add(name)
+  }
+  return ['cap_net_admin', 'cap_net_raw', 'cap_net_bind_service'].every((capability) =>
+    capabilities.has(capability)
+  )
 }
 
 // 会话管理员状态缓存
@@ -70,29 +70,19 @@ export function getSessionAdminStatus(): boolean {
 export { checkAdminPrivileges } from './admin'
 
 export async function checkMihomoCorePermissions(): Promise<boolean> {
-  const { core = 'mihomo' } = await getAppConfig()
-  const corePath = mihomoCorePath(core)
-
   try {
-    if (process.platform === 'win32') {
-      return await checkAdminPrivileges()
-    }
-
-    if (process.platform === 'darwin' || process.platform === 'linux') {
-      const stats = await stat(corePath)
-      return (stats.mode & 0o4000) !== 0 && stats.uid === 0
-    }
+    const { stdout } = await execFilePromise('/usr/bin/getcap', [mihomoCorePath()], {
+      timeout: 3000
+    })
+    return hasLinuxTunCapabilities(stdout)
   } catch {
     return false
   }
-
-  return false
 }
 
 export async function checkHighPrivilegeCore(): Promise<boolean> {
   try {
-    const { core = 'mihomo' } = await getAppConfig()
-    const corePath = mihomoCorePath(core)
+    const corePath = mihomoCorePath()
 
     managerLogger.info(`Checking high privilege core: ${corePath}`)
 
@@ -126,10 +116,7 @@ export async function checkHighPrivilegeCore(): Promise<boolean> {
 }
 
 async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
-  const mihomoExecutables =
-    process.platform === 'win32'
-      ? ['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe']
-      : ['mihomo', 'mihomo-alpha', 'mihomo-smart']
+  const mihomoExecutables = process.platform === 'win32' ? ['mihomomo.exe'] : ['mihomomo']
 
   try {
     if (process.platform === 'win32') {
@@ -183,7 +170,7 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
           if (
             proc &&
             typeof proc.Name === 'string' &&
-            proc.Name.toLowerCase().includes('mihomo') &&
+            proc.Name.toLowerCase() === 'mihomomo' &&
             proc.Path === null
           ) {
             return true
@@ -234,30 +221,10 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
   return false
 }
 
+// File ownership and capabilities belong to pacman, never the Electron runtime.
 export async function grantTunPermissions(): Promise<void> {
-  const { core = 'mihomo' } = await getAppConfig()
-
-  if (!isValidCoreName(core)) {
-    throw new Error(`Invalid core name: ${core}. Allowed values: ${ALLOWED_CORES.join(', ')}`)
-  }
-
-  const corePath = mihomoCorePath(core)
-  validateCorePath(corePath)
-
-  if (process.platform === 'darwin') {
-    const escapedPath = shellEscape(corePath)
-    const script = `do shell script "chown root:admin ${escapedPath} && chmod +sx ${escapedPath}" with administrator privileges`
-    await execFilePromise('osascript', ['-e', script])
-  }
-
-  if (process.platform === 'linux') {
-    await execFilePromise('pkexec', ['chown', 'root:root', corePath])
-    await execFilePromise('pkexec', ['chmod', '+sx', corePath])
-  }
-
-  if (process.platform === 'win32') {
-    throw new Error('Windows platform requires running as administrator')
-  }
+  if (await checkMihomoCorePermissions()) return
+  throw new Error(KERNEL_PERMISSIONS_MESSAGE)
 }
 
 export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
@@ -313,10 +280,15 @@ export async function requestTunPermissions(): Promise<void> {
 export async function showTunPermissionDialog(): Promise<boolean> {
   managerLogger.info('Preparing TUN permission dialog...')
 
-  const title = i18next.t('tun.permissions.title') || '需要管理员权限'
+  const title =
+    process.platform === 'linux'
+      ? 'mihomomo package permissions'
+      : i18next.t('tun.permissions.title') || '需要管理员权限'
   const message =
-    i18next.t('tun.permissions.message') ||
-    '启用 TUN 模式需要管理员权限，是否现在重启应用获取权限？'
+    process.platform === 'linux'
+      ? KERNEL_PERMISSIONS_MESSAGE
+      : i18next.t('tun.permissions.message') ||
+        '启用 TUN 模式需要管理员权限，是否现在重启应用获取权限？'
   const confirmText = i18next.t('common.confirm') || '确认'
   const cancelText = i18next.t('common.cancel') || '取消'
 
@@ -358,9 +330,7 @@ export async function validateTunPermissionsOnStartup(
 
   if (!hasPermissions) {
     // 启动时没有权限，静默禁用 TUN，不弹窗打扰用户
-    managerLogger.warn(
-      'TUN is enabled but insufficient permissions detected, auto-disabling TUN...'
-    )
+    managerLogger.warn(KERNEL_PERMISSIONS_MESSAGE)
     await patchControledMihomoConfig({ tun: { enable: false } })
 
     const { mainWindow } = await import('../index')

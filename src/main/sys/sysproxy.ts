@@ -14,7 +14,7 @@ import { resourcesFilesDir } from '../utils/dirs'
 let triggerSysProxyTimer: NodeJS.Timeout | null = null
 let triggerSysProxyQueue: Promise<void> = Promise.resolve()
 let triggerSysProxySequence = 0
-const helperSocketPath = '/tmp/mihomo-party-helper.sock'
+const helperSocketPath = '/tmp/clash-momo-helper.sock'
 const helperPath = '/Library/PrivilegedHelperTools/party.mihomo.helper'
 const helperPlistPath = '/Library/LaunchDaemons/party.mihomo.helper.plist'
 const helperService = 'system/party.mihomo.helper'

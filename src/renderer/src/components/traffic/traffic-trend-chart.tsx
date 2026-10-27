@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import dayjs from '@renderer/utils/dayjs'
 import React, { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Line } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
@@ -26,17 +27,25 @@ interface TrendPoint {
 interface Props {
   data: TrendPoint[]
   bucketSizeMs: number
+  timezone?: string
 }
 
-const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs }) => {
+const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs, timezone }) => {
+  const { t } = useTranslation()
   const labels = useMemo(
     () =>
       data.map((d) => {
+        if (timezone)
+          return new Intl.DateTimeFormat(undefined, {
+            timeZone: timezone,
+            month: '2-digit',
+            day: '2-digit'
+          }).format(d.timestamp)
         if (bucketSizeMs >= 86400000) return dayjs(d.timestamp).format('MM-DD')
         if (bucketSizeMs >= 3600000) return dayjs(d.timestamp).format('MM-DD HH:mm')
         return dayjs(d.timestamp).format('HH:mm')
       }),
-    [data, bucketSizeMs]
+    [data, bucketSizeMs, timezone]
   )
 
   const chartData = useMemo(
@@ -44,7 +53,7 @@ const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs }) => {
       labels,
       datasets: [
         {
-          label: '↑',
+          label: t('traffic.upload'),
           data: data.map((d) => d.upload),
           fill: true,
           backgroundColor: (ctx: ScriptableContext<'line'>) => {
@@ -58,10 +67,10 @@ const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs }) => {
           borderColor: 'rgba(34,197,94,0.8)',
           borderWidth: 1.5,
           pointRadius: 0,
-          tension: 0.4
+          tension: 0
         },
         {
-          label: '↓',
+          label: t('traffic.download'),
           data: data.map((d) => d.download),
           fill: true,
           backgroundColor: (ctx: ScriptableContext<'line'>) => {
@@ -75,11 +84,11 @@ const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs }) => {
           borderColor: 'rgba(59,130,246,0.8)',
           borderWidth: 1.5,
           pointRadius: 0,
-          tension: 0.4
+          tension: 0
         }
       ]
     }),
-    [data, labels]
+    [data, labels, t]
   )
 
   const options: ChartOptions<'line'> = {
@@ -125,7 +134,11 @@ const TrafficTrendChart: React.FC<Props> = ({ data, bucketSizeMs }) => {
     )
   }
 
-  return <Line data={chartData} options={options} />
+  return (
+    <div role="img" aria-label={t('traffic.history.trend')} className="h-full">
+      <Line data={chartData} options={options} />
+    </div>
+  )
 }
 
 export default TrafficTrendChart

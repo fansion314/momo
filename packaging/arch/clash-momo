@@ -1,0 +1,3 @@
+#!/bin/sh
+cd /usr/lib/clash-momo
+exec /usr/bin/electron /usr/lib/clash-momo "$@"

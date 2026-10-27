@@ -6,3 +6,6 @@ LICENSE.md
 tsconfig.json
 tsconfig.*.json
 .codex-review
+.pnpm-store
+.cache
+.vite

@@ -1,11 +1,10 @@
 import { TitleBarOverlayOptions } from 'electron'
 import type {
-  TrafficUsageAggregate,
-  TrafficUsageBreakdownQuery,
-  TrafficUsageDimension,
-  TrafficUsageImportBatch,
-  TrafficUsageOverview
-} from '../../../shared/trafficUsage'
+  HistoryEndpoint,
+  HistoryQuery,
+  HistoryResult,
+  HistoryStatus
+} from '../../../shared/traffic-history'
 
 function checkIpcError<T>(response: unknown): T {
   if (response && typeof response === 'object' && 'invokeError' in response) {
@@ -36,24 +35,17 @@ interface IpcApi {
   mihomoChangeProxy: (group: string, proxy: string) => Promise<IMihomoProxy>
   mihomoUnfixedProxy: (group: string) => Promise<IMihomoProxy>
   mihomoUpgradeGeo: () => Promise<void>
-  mihomoUpgrade: () => Promise<void>
   mihomoUpgradeUI: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string, provider?: string) => Promise<IMihomoDelay>
   mihomoGroupDelay: (group: string, url?: string) => Promise<IMihomoGroupDelay>
   patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
   mihomoSmartGroupWeights: (groupName: string) => Promise<Record<string, number>>
   mihomoSmartFlushCache: (configName?: string) => Promise<void>
-  queryTrafficUsageOverview: (
-    type: TrafficUsageDimension,
-    startTime: number,
-    endTime: number,
-    bucketSizeMs: number
-  ) => Promise<TrafficUsageOverview>
-  queryTrafficUsageBreakdown: (
-    query: TrafficUsageBreakdownQuery
-  ) => Promise<TrafficUsageAggregate[]>
-  importTrafficUsage: (batch: TrafficUsageImportBatch) => Promise<void>
-  clearTrafficUsage: () => Promise<void>
+  queryTrafficHistory: (
+    endpoint: HistoryEndpoint,
+    query: HistoryQuery
+  ) => Promise<HistoryResult<unknown>>
+  trafficHistoryStatus: () => Promise<HistoryStatus>
   getSmartOverrideContent: () => Promise<string | null>
   // AutoRun
   checkAutoRun: () => Promise<boolean>
@@ -211,15 +203,8 @@ interface IpcApi {
   setNativeTheme: (theme: 'system' | 'light' | 'dark') => Promise<void>
   copyEnv: (type: 'bash' | 'cmd' | 'powershell' | 'fish' | 'nushell') => Promise<void>
   // Update
-  checkUpdate: () => Promise<IAppVersion | undefined>
-  downloadAndInstallUpdate: (version: string) => Promise<void>
   getVersion: () => Promise<string>
   platform: () => Promise<NodeJS.Platform>
-  fetchMihomoTags: (
-    forceRefresh?: boolean
-  ) => Promise<{ name: string; zipball_url: string; tarball_url: string }[]>
-  installSpecificMihomoCore: (version: string) => Promise<void>
-  clearMihomoVersionCache: () => Promise<void>
   // Backup
   webdavBackup: () => Promise<boolean>
   webdavRestore: (filename: string) => Promise<void>
@@ -310,17 +295,14 @@ export const {
   mihomoChangeProxy,
   mihomoUnfixedProxy,
   mihomoUpgradeGeo,
-  mihomoUpgrade,
   mihomoUpgradeUI,
   mihomoProxyDelay,
   mihomoGroupDelay,
   patchMihomoConfig,
   mihomoSmartGroupWeights,
   mihomoSmartFlushCache,
-  queryTrafficUsageOverview,
-  queryTrafficUsageBreakdown,
-  importTrafficUsage,
-  clearTrafficUsage,
+  queryTrafficHistory,
+  trafficHistoryStatus,
   getSmartOverrideContent,
   // AutoRun
   checkAutoRun,
@@ -415,12 +397,7 @@ export const {
   setNativeTheme,
   copyEnv,
   // Update
-  checkUpdate,
-  downloadAndInstallUpdate,
   getVersion,
-  fetchMihomoTags,
-  installSpecificMihomoCore,
-  clearMihomoVersionCache,
   // Backup
   webdavBackup,
   webdavRestore,

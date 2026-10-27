@@ -174,7 +174,7 @@ async function killOldMihomoProcesses(): Promise<void> {
 
   try {
     const execFilePromise = promisify(execFile)
-    const coreNames = new Set(['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe'])
+    const coreNames = new Set(['mihomomo.exe'])
     const { stdout } = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'], {
       windowsHide: true,
       timeout: 3000,
@@ -441,11 +441,13 @@ function initDeeplink(): void {
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
       app.setAsDefaultProtocolClient('clash', process.execPath, [path.resolve(process.argv[1])])
-      app.setAsDefaultProtocolClient('mihomo', process.execPath, [path.resolve(process.argv[1])])
+      app.setAsDefaultProtocolClient('clash-momo', process.execPath, [
+        path.resolve(process.argv[1])
+      ])
     }
   } else {
     app.setAsDefaultProtocolClient('clash')
-    app.setAsDefaultProtocolClient('mihomo')
+    app.setAsDefaultProtocolClient('clash-momo')
   }
 }
 

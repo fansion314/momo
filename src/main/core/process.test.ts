@@ -10,7 +10,7 @@ vi.mock('child_process', () => ({
 }))
 
 vi.mock('../utils/dirs', () => ({
-  mihomoCoreDir: () => 'C:\\Program Files\\Clash Party\\resources\\sidecar'
+  mihomoCoreDir: () => 'C:\\Program Files\\Clash Momo\\resources\\sidecar'
 }))
 
 vi.mock('../utils/logger', () => ({
@@ -23,11 +23,11 @@ vi.mock('./mihomoApi', () => ({
 
 const tasklistOutput = [
   '"MihomoTray.exe","1001","Console","1","10,000 K"',
-  '"mihomo.exe","1002","Console","1","20,000 K"',
-  '"mihomo.exe","1003","Console","1","20,000 K"',
-  '"Mihomo-Smart.exe","1004","Console","1","20,000 K"',
-  '"mihomo-helper.exe","1005","Console","1","20,000 K"',
-  '"mihomo.exe","1006","Services","0","20,000 K"'
+  '"mihomomo.exe","1002","Console","1","20,000 K"',
+  '"mihomomo.exe","1003","Console","1","20,000 K"',
+  '"mihomo-smart.exe","1004","Console","1","20,000 K"',
+  '"mihomo.exe","1005","Console","1","20,000 K"',
+  '"mihomomo.exe","1006","Services","0","20,000 K"'
 ].join('\r\n')
 
 function mockExecFile(processInfo: unknown, powershellError?: Error): void {
@@ -62,19 +62,19 @@ describe('cleanupWindowsNamedPipes', () => {
       .map(([pid]) => pid as number)
   }
 
-  it('only terminates bundled core executables', async () => {
+  it('only terminates this client core and preserves original Mihomo executables', async () => {
     mockExecFile([
-      { Id: 1002, Path: 'C:\\Program Files\\Clash Party\\resources\\sidecar\\mihomo.exe' },
-      { Id: 1003, Path: 'D:\\tools\\mihomo\\mihomo.exe' },
-      { Id: 1004, Path: 'c:\\program files\\clash party\\resources\\sidecar\\MIHOMO-SMART.EXE' },
+      { Id: 1002, Path: 'C:\\Program Files\\Clash Momo\\resources\\sidecar\\mihomomo.exe' },
+      { Id: 1003, Path: 'D:\\tools\\mihomo\\mihomomo.exe' },
+      { Id: 1004, Path: 'c:\\program files\\clash momo\\resources\\sidecar\\MIHOMO-SMART.EXE' },
       { Id: 1006, Path: null }
     ])
 
     await cleanupWindowsNamedPipes()
 
-    expect(terminatedPids()).toEqual([1002, 1004, 1006])
+    expect(terminatedPids()).toEqual([1002, 1006])
     const powershellArgs = mocks.execFile.mock.calls.find(([file]) => file === 'powershell')?.[1]
-    expect(powershellArgs?.join(' ')).toContain('Get-Process -Id 1002,1003,1004,1006')
+    expect(powershellArgs?.join(' ')).toContain('Get-Process -Id 1002,1003,1006')
   })
 
   it('skips process inspection when no core executable is running', async () => {
@@ -94,6 +94,6 @@ describe('cleanupWindowsNamedPipes', () => {
 
     await cleanupWindowsNamedPipes()
 
-    expect(terminatedPids()).toEqual([1002, 1003, 1004, 1006])
+    expect(terminatedPids()).toEqual([1002, 1003, 1006])
   })
 })

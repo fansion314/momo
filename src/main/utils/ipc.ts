@@ -17,7 +17,6 @@ import {
   mihomoUnfixedProxy,
   mihomoUpdateProxyProviders,
   mihomoUpdateRuleProviders,
-  mihomoUpgrade,
   mihomoUpgradeGeo,
   mihomoUpgradeUI,
   mihomoHotReloadConfig,
@@ -30,7 +29,6 @@ import {
 import { checkAutoRun, disableAutoRun, enableAutoRun } from '../sys/autoRun'
 import {
   getAppConfig,
-  patchAppConfig,
   getControledMihomoConfig,
   patchControledMihomoConfig,
   getProfileConfig,
@@ -80,7 +78,6 @@ import {
   showErrorDialog
 } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
-import { checkUpdate, downloadAndInstallUpdate } from '../resolve/autoUpdater'
 import {
   getFilePath,
   openFile,
@@ -137,11 +134,10 @@ import {
 } from '../resolve/plugin'
 import { getPluginConfig } from '../config/plugin'
 import {
-  clearTrafficUsage,
-  importTrafficUsage,
-  queryTrafficUsageBreakdown,
-  queryTrafficUsageOverview
-} from '../traffic/database'
+  queryTrafficHistory,
+  trafficHistoryStatus,
+  patchAppConfigWithHistory
+} from '../core/traffic-history'
 import {
   getSimpleConfig,
   getSimpleNode,
@@ -170,7 +166,6 @@ import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getAppInfo } from './app-info'
 import { logDir, rulePath } from './dirs'
-import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
 import { startSubStoreServices } from './init'
 
@@ -202,21 +197,6 @@ function registerHandlers(handlers: Record<string, AsyncFn | SyncFn>, async = tr
       ipcMain.handle(channel, (_e, ...args) => (handler as SyncFn)(...args))
     }
   }
-}
-
-async function fetchMihomoTags(
-  forceRefresh = false
-): Promise<{ name: string; zipball_url: string; tarball_url: string }[]> {
-  return await getGitHubTags('MetaCubeX', 'mihomo', forceRefresh)
-}
-
-async function installSpecificMihomoCore(version: string): Promise<void> {
-  clearVersionCache('MetaCubeX', 'mihomo')
-  return await installMihomoCore(version)
-}
-
-async function clearMihomoVersionCache(): Promise<void> {
-  clearVersionCache('MetaCubeX', 'mihomo')
 }
 
 async function getRuleStr(id: string): Promise<string> {
@@ -269,10 +249,8 @@ const asyncHandlers: Record<string, AsyncFn> = {
   mihomoCloseAllConnections,
   mihomoRules,
   mihomoRulesDisable,
-  queryTrafficUsageOverview,
-  queryTrafficUsageBreakdown,
-  importTrafficUsage,
-  clearTrafficUsage,
+  queryTrafficHistory,
+  trafficHistoryStatus,
   mihomoProxies,
   mihomoGroups,
   mihomoProxyProviders,
@@ -282,7 +260,6 @@ const asyncHandlers: Record<string, AsyncFn> = {
   mihomoChangeProxy,
   mihomoUnfixedProxy,
   mihomoUpgradeGeo,
-  mihomoUpgrade,
   mihomoUpgradeUI,
   mihomoProxyDelay,
   mihomoGroupDelay,
@@ -295,7 +272,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   disableAutoRun,
   // Config
   getAppConfig,
-  patchAppConfig,
+  patchAppConfig: patchAppConfigWithHistory,
   getControledMihomoConfig,
   patchControledMihomoConfig,
   setControlDns,
@@ -378,11 +355,6 @@ const asyncHandlers: Record<string, AsyncFn> = {
   setupFirewall,
   copyEnv,
   // Update
-  checkUpdate,
-  downloadAndInstallUpdate,
-  fetchMihomoTags,
-  installSpecificMihomoCore,
-  clearMihomoVersionCache,
   // Backup
   webdavBackup,
   webdavRestore,

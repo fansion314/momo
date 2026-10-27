@@ -1,68 +1,36 @@
-name: CI
-
+name: clash-momo checks
 on:
-  pull_request:
   push:
-    branches:
-      - smart_core
-      - main
-    paths-ignore:
-      - 'README.md'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/workflows/issues.yml'
-
+    branches: ['clash-momo']
+  pull_request:
+    branches: ['clash-momo']
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+  workflow_dispatch:
 permissions:
   contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  check:
-    name: Lint, typecheck & format
+  checks:
     runs-on: ubuntu-latest
+    container: archlinux:latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - run: pacman -Syu --noconfirm base-devel git nodejs pnpm
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          node-version: 22
-          cache: 'pnpm'
-      # --ignore-scripts skips the prepare step that downloads the mihomo cores;
-      # none of the static checks or unit tests need the sidecar binaries.
-      - name: Install dependencies
-        run: pnpm install --ignore-scripts
-      - name: Format check
-        run: pnpm run format:check
-      - name: Lint
-        run: pnpm run lint:check
-      - name: Typecheck
-        run: pnpm run typecheck
-
-  test:
-    name: Unit tests (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - name: Install dependencies
-        run: pnpm install --ignore-scripts
-      - name: Test
-        run: pnpm test
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Run checks as an ordinary user
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- bash -e <<'CHECKS'
+          cd "$GITHUB_WORKSPACE"
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm --package=vite-plus@1.4.0 dlx vp run format:check
+          pnpm --package=vite-plus@1.4.0 dlx vp run lint:check
+          pnpm --package=vite-plus@1.4.0 dlx vp run typecheck
+          pnpm --package=vite-plus@1.4.0 dlx vp run test
+          CHECKS

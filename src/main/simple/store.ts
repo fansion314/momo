@@ -3,6 +3,8 @@ import { mkdir, readFile, rm } from 'fs/promises'
 import path from 'path'
 import { isDeepStrictEqual } from 'util'
 import { BrowserWindow } from 'electron'
+import { getAppConfig } from '../config/app'
+import { applyHistoryConfig } from '../core/history-config'
 import { atomicWriteFile, WriteQueue } from '../utils/safeFile'
 import { parse, stringify } from '../utils/yaml'
 import {
@@ -101,6 +103,9 @@ export async function compileAndWriteSimple(
     effectiveShared
   )
   if (result.errors.length) return result
+  const runtime = parse(result.yaml) as Record<string, unknown>
+  applyHistoryConfig(runtime, await getAppConfig())
+  result.yaml = stringify(runtime)
   await mkdir(mihomoWorkDir(), { recursive: true })
   await atomicWriteFile(simpleOutputPath(), result.yaml, { encoding: 'utf8' })
   await atomicWriteFile(mihomoWorkConfigPath('work'), result.yaml, { encoding: 'utf8' })
@@ -148,6 +153,9 @@ export async function commitSimpleState(
     import('../core/mihomoApi')
   ])
   const appConfig = await getAppConfig()
+  const runtime = parse(result.yaml) as Record<string, unknown>
+  applyHistoryConfig(runtime, appConfig)
+  result.yaml = stringify(runtime)
   const active = appConfig.operationMode === 'simple'
   if (!active && !options.allowStandard) throw new Error('请先切换到简易模式')
   const candidate = path.join(mihomoWorkDir(), '.simple-candidate.yaml')

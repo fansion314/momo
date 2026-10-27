@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Clash Momo
+Comment=Mihomo proxy client
+Exec=clash-momo %U
+Icon=world.fansionia.clash-momo
+StartupWMClass=clash-momo
+Categories=Network;
+MimeType=x-scheme-handler/clash;x-scheme-handler/mihomo;

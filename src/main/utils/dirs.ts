@@ -9,31 +9,19 @@ export function isPortable(): boolean {
   return existsSync(path.join(exeDir(), 'PORTABLE'))
 }
 
-function portableDataDir(): string {
-  return path.join(exeDir(), 'data')
+// Keep development and production isolated from each other and from upstream Party.
+export function isSystemInstall(): boolean {
+  return path.resolve(app.getAppPath()) === '/usr/lib/clash-momo'
 }
 
-// 本地 Electron.app 使用独立的应用名和数据目录，避免开发时访问正式版的
-// `mihomo-party Safe Storage` Keychain item 或修改正式配置。已打包的 dev 预发行版
-// 仍与正式版共享身份和数据，保持原有滚动升级路径。
 export function configureAppPaths(): void {
-  if (!app.isPackaged) {
-    app.setName('mihomo-party-dev')
-    app.setPath('userData', path.join(app.getPath('appData'), 'mihomo-party-dev'))
-  }
-
-  // portable 模式始终拥有最高优先级。
-  if (isPortable()) {
-    app.setPath('userData', portableDataDir())
-  }
+  const name = isSystemInstall() || app.isPackaged ? 'clash-momo' : 'clash-momo-dev'
+  app.setName(name)
+  app.setPath('userData', path.join(app.getPath('appData'), name))
 }
 
 export function dataDir(): string {
-  if (isPortable()) {
-    return portableDataDir()
-  } else {
-    return app.getPath('userData')
-  }
+  return app.getPath('userData')
 }
 
 export function taskDir(): string {
@@ -62,6 +50,7 @@ export function exePath(): string {
 }
 
 export function resourcesDir(): string {
+  if (isSystemInstall()) return '/usr/lib/clash-momo/resources'
   if (is.dev) {
     return path.join(__dirname, '../../extra')
   } else {
@@ -82,16 +71,12 @@ export function themesDir(): string {
 }
 
 export function mihomoCoreDir(): string {
-  return path.join(resourcesDir(), 'sidecar')
+  return '/usr/bin'
 }
 
-export function mihomoCorePath(core: string): string {
-  const isWin = process.platform === 'win32'
-  // 处理 Smart 内核
-  if (core === 'mihomo-smart') {
-    return path.join(mihomoCoreDir(), `mihomo-smart${isWin ? '.exe' : ''}`)
-  }
-  return path.join(mihomoCoreDir(), `${core}${isWin ? '.exe' : ''}`)
+// A single system-owned core. Legacy arguments are accepted only for old callers.
+export function mihomoCorePath(_core?: string): string {
+  return '/usr/bin/mihomomo'
 }
 
 export function appConfigPath(): string {
@@ -179,7 +164,7 @@ export function logPath(): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-  const name = `clash-party-${year}-${month}-${day}`
+  const name = `clash-momo-${year}-${month}-${day}`
   return path.join(logDir(), `${name}.log`)
 }
 

@@ -12,7 +12,7 @@ const execFilePromise = promisify(execFile)
 // 常量
 const CORE_READY_MAX_RETRIES = 30
 const CORE_READY_RETRY_INTERVAL_MS = 100
-const windowsCoreExecutables = ['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe']
+const windowsCoreExecutables = ['mihomomo.exe']
 
 export async function cleanupSocketFile(): Promise<void> {
   if (process.platform === 'win32') {
@@ -133,8 +133,8 @@ export async function cleanupUnixSockets(): Promise<void> {
   // and are safe to remove unconditionally if they exist.
   const legacyPaths = [
     '/tmp/mihomo-party.sock',
-    '/tmp/mihomo-party-admin.sock',
-    `/tmp/mihomo-party-${uid}.sock`
+    '/tmp/clash-momo-admin.sock',
+    `/tmp/clash-momo-${uid}.sock`
   ]
 
   for (const socketPath of legacyPaths) {
@@ -148,14 +148,14 @@ export async function cleanupUnixSockets(): Promise<void> {
     }
   }
 
-  // Current getMihomoIpcPath() produces /tmp/mihomo-party-<uid>-<pid>.sock,
+  // Current getMihomoIpcPath() produces /tmp/clash-momo-<uid>-<pid>.sock,
   // where <pid> is the parent Electron main-process PID. Previous versions
   // never garbage-collected these when the parent exited, so /tmp accumulates
   // one file per historical session. Sweep them now, but ONLY delete files
   // whose parent PID is no longer running to avoid nuking a sibling instance
   // (another Party window from a different user, an admin-elevated session,
   // etc.) that legitimately owns its own socket.
-  const currentPrefix = `mihomo-party-${uid}-`
+  const currentPrefix = `clash-momo-${uid}-`
   try {
     const entries = await readdir('/tmp')
     for (const name of entries) {

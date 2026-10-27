@@ -2,12 +2,12 @@ import { createConnection } from 'net'
 import axios, { AxiosInstance } from 'axios'
 import WebSocket from 'ws'
 import { app } from 'electron'
+import { isLightweightMode, subscribeLightweightMode } from '../lightweight'
 import { getAppConfig, getControledMihomoConfig, manageSmartOverride } from '../config'
 import { mainWindow } from '../window'
 import { tray } from '../resolve/tray'
 import { calcTraffic } from '../utils/calc'
 import { floatingWindow } from '../resolve/floatingWindow'
-import { recordTrafficUsage } from '../traffic/recorder'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
@@ -431,11 +431,6 @@ export const mihomoGroupDelay = async (group: string, url?: string): Promise<IMi
   })
 }
 
-export const mihomoUpgrade = async (): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.post('/upgrade', undefined, { timeout: 90000 })
-}
-
 export const mihomoUpgradeUI = async (): Promise<void> => {
   const instance = await getAxios()
   return await instance.post('/upgrade/ui')
@@ -497,6 +492,11 @@ export const mihomoSmartFlushCache = async (configName?: string): Promise<void> 
 }
 
 export const startMihomoTraffic = async (): Promise<void> => {
+  const revision = uiStreamRevision
+  if (isLightweightMode()) {
+    const config = await getAppConfig()
+    if (revision !== uiStreamRevision || (isLightweightMode() && !needsTrayTraffic(config))) return
+  }
   activateStream(trafficStream)
   await mihomoTraffic()
 }
@@ -551,6 +551,7 @@ const mihomoTraffic = async (): Promise<void> => {
 }
 
 export const startMihomoMemory = async (): Promise<void> => {
+  if (isLightweightMode()) return
   activateStream(memoryStream)
   await mihomoMemory()
 }
@@ -590,6 +591,7 @@ const mihomoMemory = async (): Promise<void> => {
 }
 
 export const startMihomoLogs = async (): Promise<void> => {
+  if (isLightweightMode()) return
   activateStream(logsStream)
   await mihomoLogs()
 }
@@ -603,6 +605,8 @@ const mihomoLogs = async (): Promise<void> => {
   if (generation === null) return
 
   const { 'log-level': logLevel = 'info' } = await getControledMihomoConfig()
+  // A lightweight transition or a newer restart may have invalidated this await.
+  if (!isCurrentStream(logsStream, generation)) return
 
   const { ws } = createMihomoWebSocket(`/logs?level=${logLevel}`)
   logsStream.ws = ws
@@ -631,6 +635,7 @@ const mihomoLogs = async (): Promise<void> => {
 }
 
 export const startMihomoConnections = async (): Promise<void> => {
+  if (isLightweightMode()) return
   activateStream(connectionsStream)
   await mihomoConnections()
 }
@@ -653,7 +658,6 @@ const mihomoConnections = async (): Promise<void> => {
     connectionsStream.retry = MAX_RETRY
     try {
       const info = JSON.parse(data) as IMihomoConnectionsInfo
-      recordTrafficUsage(info)
       if (__LEGACY_BUILD__ || mainWindow?.isVisible()) {
         mainWindow?.webContents.send('mihomoConnections', info)
       }
@@ -704,3 +708,30 @@ export async function getTrayIconStatus(): Promise<'white' | 'blue' | 'green' | 
   const [sysProxyEnabled, tunEnabled] = await Promise.all([SysProxyStatus(), TunStatus()])
   return calculateTrayIconStatus(sysProxyEnabled, tunEnabled)
 }
+
+function needsTrayTraffic(config: IAppConfig): boolean {
+  return process.platform !== 'linux' && config.showTraffic === true
+}
+
+let uiStreamRevision = 0
+subscribeLightweightMode((active) => {
+  const revision = ++uiStreamRevision
+  if (!hasCoreProcess()) return
+  if (active) {
+    stopMihomoConnections()
+    stopMihomoLogs()
+    stopMihomoMemory()
+    void getAppConfig()
+      .then((config) => {
+        if (revision === uiStreamRevision && !needsTrayTraffic(config)) stopMihomoTraffic()
+      })
+      .catch((error) => mihomoApiLogger.warn('Failed to stop background UI streams', error))
+    return
+  }
+  void Promise.all([
+    startMihomoTraffic(),
+    startMihomoConnections(),
+    startMihomoLogs(),
+    startMihomoMemory()
+  ]).catch((error) => mihomoApiLogger.warn('Failed to restore UI streams', error))
+})

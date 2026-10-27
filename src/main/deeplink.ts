@@ -8,7 +8,7 @@ import { safeShowErrorBox } from './utils/init'
 export function findDeepLink(args: string[]): string | undefined {
   return args.find((arg) => {
     const lower = arg.toLowerCase()
-    return lower.startsWith('clash://') || lower.startsWith('mihomo://')
+    return lower.startsWith('clash-momo://')
   })
 }
 

@@ -3,12 +3,15 @@ import { readFileSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import windowStateKeeper from 'electron-window-state'
+import { isLightweightMode } from '../lightweight'
 import { getAppConfig, patchAppConfig } from '../config'
 import { floatingWindowLogger } from '../utils/logger'
 import { applyTheme } from './theme'
 import { buildContextMenu, showTrayIcon } from './tray'
 
 export let floatingWindow: BrowserWindow | null = null
+let floatingWindowCreation: Promise<void> | null = null
+let floatingWindowRevision = 0
 
 const FLOATING_WINDOW_STATE_FILE = 'floating-window-state.json'
 const FLOATING_WINDOW_WIDTH = 135
@@ -50,10 +53,13 @@ function restoreFloatingWindowPosition(): { x?: number; y?: number } {
 }
 
 async function createFloatingWindow(): Promise<void> {
+  const revision = floatingWindowRevision
   try {
     const restoredPosition = restoreFloatingWindowPosition()
     const floatingWindowState = windowStateKeeper({ file: FLOATING_WINDOW_STATE_FILE })
     const { customTheme = 'default.css', floatingWindowCompatMode = true } = await getAppConfig()
+
+    if (isLightweightMode() || revision !== floatingWindowRevision) return
 
     const safeMode = process.env.FLOATING_SAFE_MODE === 'true'
     const useCompatMode =
@@ -97,6 +103,7 @@ async function createFloatingWindow(): Promise<void> {
 
     // 事件监听器
     floatingWindow.webContents.on('render-process-gone', (_, details) => {
+      if (isLightweightMode() || floatingWindow !== win) return
       logError('Render process gone', details.reason)
       // 只丢引用不销毁的话，屏幕上会残留一个无边框、置顶、不在任务栏且 closable: false 的幽灵窗，
       // 用户既关不掉也找不到，只能重启应用
@@ -115,9 +122,10 @@ async function createFloatingWindow(): Promise<void> {
     })
 
     floatingWindow.on('ready-to-show', () => {
+      if (isLightweightMode() || win.isDestroyed() || revision !== floatingWindowRevision) return
       applyTheme(customTheme)
-      floatingWindow?.show()
-      floatingWindow?.setAlwaysOnTop(true, 'screen-saver')
+      win.show()
+      win.setAlwaysOnTop(true, 'screen-saver')
     })
 
     floatingWindow.on('moved', () => {
@@ -143,6 +151,7 @@ async function createFloatingWindow(): Promise<void> {
 
     is.dev ? await floatingWindow.loadURL(url) : await floatingWindow.loadFile(url)
   } catch (error) {
+    if (isLightweightMode() || revision !== floatingWindowRevision) return
     logError('Failed to create floating window', error)
     floatingWindow = null
     throw error
@@ -161,11 +170,18 @@ async function restoreTrayIcon(): Promise<void> {
 }
 
 export async function showFloatingWindow(): Promise<void> {
+  if (isLightweightMode()) return
   try {
     if (floatingWindow && !floatingWindow.isDestroyed()) {
       floatingWindow.show()
     } else {
-      await createFloatingWindow()
+      if (!floatingWindowCreation) {
+        floatingWindowCreation = createFloatingWindow().finally(() => {
+          floatingWindowCreation = null
+        })
+      }
+      await floatingWindowCreation
+      if (!isLightweightMode() && !floatingWindow) await showFloatingWindow()
     }
   } catch (error) {
     logError('Failed to show floating window', error)
@@ -193,12 +209,17 @@ export async function triggerFloatingWindow(): Promise<void> {
   }
 }
 
+/** Intentional lifecycle teardown must not change the user's floating/tray settings. */
+export function destroyFloatingWindow(): void {
+  ++floatingWindowRevision
+  ipcMain.removeAllListeners('updateFloatingWindow')
+  const window = floatingWindow
+  floatingWindow = null
+  if (window && !window.isDestroyed()) window.destroy()
+}
+
 export async function closeFloatingWindow(): Promise<void> {
-  if (floatingWindow) {
-    ipcMain.removeAllListeners('updateFloatingWindow')
-    floatingWindow.destroy()
-    floatingWindow = null
-  }
+  destroyFloatingWindow()
   await restoreTrayIcon()
 }
 

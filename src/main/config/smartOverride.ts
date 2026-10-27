@@ -410,9 +410,9 @@ export async function removeSmartOverride(): Promise<void> {
  * 根据应用配置管理 Smart 覆写
  */
 export async function manageSmartOverride(): Promise<void> {
-  const { enableSmartCore = true, enableSmartOverride = true, core } = await getAppConfig()
+  const { enableSmartOverride = true } = await getAppConfig()
 
-  if (enableSmartCore && enableSmartOverride && core === 'mihomo-smart') {
+  if (enableSmartOverride) {
     await createSmartOverride()
   } else {
     await removeSmartOverride()

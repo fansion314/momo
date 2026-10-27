@@ -11,6 +11,7 @@ const EXE = path.join(EXE_DIR, 'Electron')
 let packaged = false
 let portable = false
 let appName = 'mihomo-party'
+let appPath = '/tmp/clash-momo'
 const paths: Record<string, string> = {}
 const setPath = vi.fn((name: string, value: string) => {
   paths[name] = value
@@ -27,7 +28,8 @@ vi.mock('electron', () => ({
     getPath: (name: string) => paths[name],
     setPath,
     setName,
-    getName: () => appName
+    getName: () => appName,
+    getAppPath: () => appPath
   }
 }))
 
@@ -43,6 +45,7 @@ vi.mock('@electron-toolkit/utils', () => ({ is: { dev: true } }))
 
 beforeEach(() => {
   packaged = false
+  appPath = '/tmp/clash-momo'
   portable = false
   appName = 'mihomo-party'
   Object.assign(paths, {
@@ -63,27 +66,32 @@ describe('configureAppPaths', () => {
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()
 
-    expect(setName).toHaveBeenCalledWith('mihomo-party-dev')
-    expect(paths.userData).toBe(path.join(APP_DATA, 'mihomo-party-dev'))
+    expect(setName).toHaveBeenCalledWith('clash-momo-dev')
+    expect(paths.userData).toBe(path.join(APP_DATA, 'clash-momo-dev'))
   })
 
-  it('leaves packaged stable and dev-release builds on production paths', async () => {
+  it('isolates packaged builds from upstream production paths', async () => {
     packaged = true
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()
 
-    expect(setName).not.toHaveBeenCalled()
-    expect(setPath).not.toHaveBeenCalled()
-    expect(paths.userData).toBe(path.join(APP_DATA, 'mihomo-party'))
+    expect(setName).toHaveBeenCalledWith('clash-momo')
+    expect(paths.userData).toBe(path.join(APP_DATA, 'clash-momo'))
   })
 
-  it('keeps portable userData precedence over local development isolation', async () => {
-    portable = true
-    const { configureAppPaths } = await import('./dirs')
+  it('uses production identity and resources for the system Electron directory install', async () => {
+    appPath = '/usr/lib/clash-momo'
+    const { configureAppPaths, resourcesDir } = await import('./dirs')
     configureAppPaths()
+    expect(setName).toHaveBeenCalledWith('clash-momo')
+    expect(paths.userData).toBe(path.join(APP_DATA, 'clash-momo'))
+    expect(resourcesDir()).toBe('/usr/lib/clash-momo/resources')
+  })
 
-    expect(setName).toHaveBeenCalledWith('mihomo-party-dev')
-    expect(paths.userData).toBe(path.join(EXE_DIR, 'data'))
-    expect(setPath).toHaveBeenLastCalledWith('userData', path.join(EXE_DIR, 'data'))
+  it('resolves every legacy core choice to the sole system binary', async () => {
+    const { mihomoCorePath } = await import('./dirs')
+    for (const core of ['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific', 'mihomomo']) {
+      expect(mihomoCorePath(core)).toBe('/usr/bin/mihomomo')
+    }
   })
 })

@@ -1,14 +1,13 @@
 import { ChildProcess, execFile, spawn } from 'child_process'
 import { randomUUID } from 'crypto'
-import { readFile, mkdir, rm, writeFile } from 'fs/promises'
+import { readFile, mkdir, rm } from 'fs/promises'
 import { promisify } from 'util'
 import { setTimeout as delay } from 'timers/promises'
 import path from 'path'
 import os from 'os'
 import { existsSync, watch, type FSWatcher as NodeFSWatcher } from 'fs'
-import chokidar, { type FSWatcher as ChokidarWatcher } from 'chokidar'
-import { app, dialog, ipcMain } from 'electron'
-import { mainWindow } from '../window'
+import { dialog, ipcMain } from 'electron'
+import { mainWindow, enterLightweightMode } from '../window'
 import {
   getAppConfig,
   getControledMihomoConfig,
@@ -19,7 +18,6 @@ import {
 import {
   dataDir,
   coreLogPath,
-  mihomoCoreDir,
   mihomoCorePath,
   mihomoProfileWorkDir,
   mihomoTestDir,
@@ -27,8 +25,7 @@ import {
   mihomoWorkDir
 } from '../utils/dirs'
 import { uploadRuntimeConfigIfChanged } from '../resolve/gistApi'
-import { startMonitor } from '../resolve/trafficMonitor'
-import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
+import { ensureRuntimeFiles } from '../utils/init'
 import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
@@ -87,11 +84,11 @@ const coreHookTimeout = 30000
 const automaticRestartDelay = 750
 // macOS 释放 utun 通常需要 1-2 秒；等待 3 秒后再升级为 SIGKILL，
 // 避免新核心启动时旧核心仍占用虚拟网卡。
-const coreShutdownTimeout = 3000
+const coreShutdownTimeout = 6000
 const resumeReloadDelay = 5000
 // 同一次失败内核可能连打多行，10 秒内只提示一次，避免弹窗刷屏
 const tunFailureReportInterval = 10000
-const coreProcessNames = ['mihomo', 'mihomo-alpha', 'mihomo-smart'] as const
+const coreProcessNames = ['mihomomo'] as const
 
 // 核心进程状态
 interface CoreProcessWatchdog {
@@ -110,7 +107,7 @@ let automaticRestartController: AbortController | null = null
 let resumeReloadTimer: NodeJS.Timeout | null = null
 
 // 文件监听器
-let coreWatcher: ChokidarWatcher | null = null
+let coreWatcherInitialized = false
 
 type CoreStartupMode = 'log' | 'post-up'
 
@@ -196,7 +193,7 @@ function startCoreProcessWatchdog(proc: ChildProcess, detached: boolean): void {
   const corePid = proc.pid
   const watchdogProcess = spawn(
     'sh',
-    ['-c', 'cat >/dev/null; kill -9 "$1" 2>/dev/null', 'mihomo-core-watchdog', `${corePid}`],
+    ['-c', 'cat >/dev/null; kill -9 "$1" 2>/dev/null', 'mihomomo-core-watchdog', `${corePid}`],
     {
       stdio: ['pipe', 'ignore', 'ignore'],
       detached: true
@@ -237,7 +234,7 @@ function hookTouchCommand(file: string): string {
 
 function coreHookDir(): string {
   if (process.platform === 'win32' && process.env.ProgramData) {
-    return path.join(process.env.ProgramData, 'mihomo-party', 'core-hooks')
+    return path.join(process.env.ProgramData, 'clash-momo', 'core-hooks')
   }
 
   return path.join(dataDir(), 'core-hooks')
@@ -368,35 +365,21 @@ async function stopPidFileCore(): Promise<void> {
   await rm(pidPath).catch(() => {})
 }
 
-// 初始化核心文件监听
+// The kernel package owns executable updates. Only runtime restart events are observed.
 export function initCoreWatcher(): void {
-  if (coreWatcher) return
-
-  coreWatcher = chokidar.watch(path.join(mihomoCoreDir(), 'meta-update'), {})
-  coreWatcher.on('unlinkDir', async () => {
-    // 等待核心自我更新完成，避免与核心自动重启产生竞态
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    try {
-      await restartCore(true)
-    } catch (e) {
-      safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
-    }
-  })
-
-  // 监听 restartCore 事件（用于 DNS 状态恢复等场景，避免循环依赖）
-  ipcMain.removeAllListeners('restartCore')
-  ipcMain.on('restartCore', async () => {
-    await restartCore()
-    mainWindow?.webContents.send('appConfigUpdated')
-  })
+  if (coreWatcherInitialized) return
+  coreWatcherInitialized = true
+  ipcMain.on('restartCore', onRestartCore)
 }
 
-// 清理核心文件监听
+async function onRestartCore(): Promise<void> {
+  await restartCore()
+  mainWindow?.webContents.send('appConfigUpdated')
+}
+
 export function cleanupCoreWatcher(): void {
-  if (coreWatcher) {
-    coreWatcher.close()
-    coreWatcher = null
-  }
+  ipcMain.off('restartCore', onRestartCore)
+  coreWatcherInitialized = false
 }
 
 // 动态生成 IPC 路径
@@ -407,13 +390,13 @@ export const getMihomoIpcPath = (): string => {
     const processId = process.pid
 
     return isAdmin
-      ? `\\\\.\\pipe\\MihomoParty\\mihomo-admin-${sessionId}-${processId}`
-      : `\\\\.\\pipe\\MihomoParty\\mihomo-user-${sessionId}-${processId}`
+      ? `\\\\.\\pipe\\ClashMomo\\mihomo-admin-${sessionId}-${processId}`
+      : `\\\\.\\pipe\\ClashMomo\\mihomo-user-${sessionId}-${processId}`
   }
 
   const uid = process.getuid?.() || 'unknown'
   const processId = process.pid
-  return `/tmp/mihomo-party-${uid}-${processId}.sock`
+  return `/tmp/clash-momo-${uid}-${processId}.sock`
 }
 
 // 核心配置接口
@@ -456,7 +439,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   let { diffWorkDir = false } = appConfig
   const {
-    core = 'mihomo',
+    core = 'mihomomo',
     autoSetDNS = true,
     mihomoCpuPriority = 'PRIORITY_NORMAL',
     coreStartupMode = 'log',
@@ -1049,33 +1032,15 @@ export function cancelSystemResumeReload(): void {
   resumeReloadTimer = null
 }
 
-// 保持核心运行
-export async function keepCoreAlive(): Promise<boolean> {
-  try {
-    await startCore(true)
-    if (child?.pid) {
-      await writeFile(path.join(dataDir(), 'core.pid'), child.pid.toString())
-    }
-    return Boolean(child?.pid)
-  } catch (e) {
-    safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
-    return false
-  }
-}
-
-// 退出但保持核心运行
+// Legacy IPC name retained for shortcuts and settings; the same core remains attached.
 export async function quitWithoutCore(): Promise<void> {
-  managerLogger.info(`Starting lightweight mode on platform: ${process.platform}`)
-  if (!(await keepCoreAlive())) return
-  await startMonitor(true)
-  managerLogger.info('Exiting main process, core will continue running in background')
-  app.exit()
+  await enterLightweightMode()
 }
 
 // 检查配置文件
 async function checkProfile(
   current: string | undefined,
-  core: string = 'mihomo',
+  core: string = 'mihomomo',
   diffWorkDir: boolean = false,
   ageSecretKey?: string
 ): Promise<void> {
@@ -1096,7 +1061,7 @@ export interface CheckProfileOptions {
 
 export async function checkProfileConfig(
   configPath: string,
-  core: string = 'mihomo',
+  core: string = 'mihomomo',
   ageSecretKey?: string,
   opts: CheckProfileOptions = {}
 ): Promise<void> {
@@ -1108,7 +1073,9 @@ export async function checkProfileConfig(
       corePath,
       ['-t', '-f', configPath, '-d', opts.workDir ?? mihomoTestDir()],
       {
-        env: buildCoreEnv(undefined, ageSecretKey),
+        // Validation uses a separate home, while native history always lives in work/.
+        // Grant that application-owned directory without disabling the core path guard.
+        env: buildCoreEnv(mihomoWorkDir(), ageSecretKey),
         signal: opts.signal,
         timeout: opts.timeoutMs
       }

@@ -123,7 +123,7 @@ const GroupEditorModal: React.FC<Props> = (props) => {
   }
   const type = String(values.type || 'select')
   const types = [...groupTypes]
-  if (appConfig?.core === 'mihomo-smart' || type === 'smart')
+  if (appConfig?.core === 'mihomomo' || type === 'smart')
     types.push({ key: 'smart', label: '智能选择' })
   if (!types.some((item) => item.key === type)) types.push({ key: type, label: type })
   const proxies = strings(values.proxies)

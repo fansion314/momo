@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { extname, join } from 'path'
 import { app, ipcMain, Menu, nativeImage, shell, systemPreferences, Tray } from 'electron'
 import { t } from 'i18next'
+import { isLightweightMode } from '../lightweight'
 import {
   changeCurrentProfile,
   getAppConfig,
@@ -404,7 +405,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
   return Menu.buildFromTemplate(contextMenu)
 }
 
-export async function createTray(): Promise<void> {
+async function createTrayInternal(): Promise<void> {
   const { useDockIcon = true, swapTrayClick = false } = await getAppConfig()
   if (process.platform === 'linux') {
     tray = new Tray(pngIcon)
@@ -537,13 +538,25 @@ export async function copyEnv(
   await writeClipboardText(text)
 }
 
-export async function showTrayIcon(): Promise<void> {
-  if (!tray) {
-    await createTray()
+let trayCreation: Promise<void> | null = null
+
+export function createTray(): Promise<void> {
+  if (tray) return Promise.resolve()
+  if (!trayCreation) {
+    trayCreation = createTrayInternal().finally(() => {
+      trayCreation = null
+    })
   }
+  return trayCreation
+}
+
+export async function showTrayIcon(): Promise<void> {
+  await createTray()
 }
 
 export async function closeTrayIcon(): Promise<void> {
+  if (trayCreation) await trayCreation
+  if (isLightweightMode()) return
   if (tray) {
     tray.destroy()
   }
@@ -692,7 +705,7 @@ function createMacIconImage(iconPath: string): Electron.NativeImage | null {
 
   let tempDir = ''
   try {
-    tempDir = mkdtempSync(join(tmpdir(), 'clash-party-tray-icon-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'clash-momo-tray-icon-'))
     const pngPath = join(tempDir, 'icon.png')
     execFileSync('sips', ['-s', 'format', 'png', iconPath, '--out', pngPath], {
       stdio: 'ignore',
@@ -809,7 +822,7 @@ async function updateTrayToolTip(
     status.push(t('tray.tooltip.customIcon'))
   }
 
-  tray.setToolTip(['Clash Party', ...status].join('\n'))
+  tray.setToolTip(['Clash Momo', ...status].join('\n'))
 }
 
 function setTrayImage(iconPath: string): void {

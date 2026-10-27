@@ -1,0 +1,112 @@
+name: Release clash-momo Arch package
+on:
+  push:
+    tags: ['clash-momo-v*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: clash-momo-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      commit: ${{ steps.resolve.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag || github.ref }}
+      - id: resolve
+        env:
+          TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^clash-momo-v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
+          pkgver=$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD)
+          pkgrel=$(sed -n 's/^pkgrel=//p' packaging/arch/PKGBUILD)
+          test "$TAG" = "clash-momo-v${pkgver}-${pkgrel}"
+          test "$(node -p 'require("./package.json").version')" = "$pkgver"
+          git fetch origin clash-momo
+          commit=$(git rev-parse HEAD)
+          test "$commit" = "$(git rev-parse "refs/tags/$TAG^{commit}")"
+          git merge-base --is-ancestor "$commit" FETCH_HEAD
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+  checks:
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_sha: ${{ needs.resolve.outputs.commit }}
+  build:
+    needs: [resolve, checks]
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --cap-add=NET_ADMIN --cap-add=NET_RAW --cap-add=NET_BIND_SERVICE
+    steps:
+      - run: pacman -Syu --noconfirm base-devel git go nodejs pnpm unzip curl sudo libcap electron xorg-server-xvfb xorg-xauth
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+      - name: Build and install as ordinary user
+        env:
+          COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
+          bash packaging/arch/build-ci.sh "$GITHUB_WORKSPACE" "$COMMIT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: clash-momo-arch
+          path: /tmp/build-output/*
+          if-no-files-found: error
+  publish:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: clash-momo-arch
+          path: dist
+      - name: Sign and publish immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          ARCH_SIGNING_PRIVATE_KEY: ${{ secrets.ARCH_SIGNING_PRIVATE_KEY }}
+          ARCH_SIGNING_PASSPHRASE: ${{ secrets.ARCH_SIGNING_PASSPHRASE }}
+          ARCH_SIGNING_KEY_ID: ${{ secrets.ARCH_SIGNING_KEY_ID }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo 'Release exists; refusing to overwrite assets' >&2
+            exit 1
+          fi
+          python3 packaging/arch/sign.py directory dist --tag "$TAG"
+          (cd dist && for package in *.pkg.tar.zst; do sha256sum "$package" > "$package.sha256"; done)
+          gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes "Arch Linux x86_64 package and source recipe."
+  notify:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        id: token
+        with:
+          app-id: ${{ vars.DISTRIBUTION_APP_ID }}
+          private-key: ${{ secrets.DISTRIBUTION_APP_PRIVATE_KEY }}
+          owner: fansion314
+          repositories: packages
+      - name: Dispatch package distribution
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: gh workflow run downstream.yml -R fansion314/packages --ref main -f project=clash-momo -f platform=arch

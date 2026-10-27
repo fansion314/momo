@@ -6,7 +6,16 @@ const { configs } = require('@electron-toolkit/eslint-config-ts')
 
 module.exports = [
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/extra/**', '**/src/native/**']
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/out/**',
+      '**/extra/**',
+      '**/src/native/**',
+      '**/.pnpm-store/**',
+      '**/.cache/**',
+      '**/.vite/**'
+    ]
   },
 
   js.configs.recommended,

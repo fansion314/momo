@@ -150,3 +150,42 @@ export const DEFAULT_MIHOMO_SNIFFER_CONFIG: DefaultMihomoSnifferConfig = {
     '2a0a:f280:203::/48'
   ]
 }
+
+/** Electron zoom is persisted in hundredths, independently of display scaling. */
+export function normalizeZoomFactor(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 1
+  return Math.round(Math.min(2, Math.max(0.5, value)) * 100) / 100
+}
+
+/** Accept either a factor (1.25) or an explicit percentage (125%). */
+export function parseZoomFactor(value: string): number | null {
+  const text = value.trim()
+  if (!/^(?:\d+(?:\.\d+)?|\.\d+)\s*%?$/.test(text)) return null
+  const factor = Number.parseFloat(text) / (text.endsWith('%') ? 100 : 1)
+  if (!Number.isFinite(factor) || factor < 0.5 || factor > 2) return null
+  return normalizeZoomFactor(factor)
+}
+
+export function normalizeRuntimeAppConfig(config: IAppConfig): IAppConfig {
+  config.core = 'mihomomo'
+  config.enableSmartCore = true
+  delete config.specificVersion
+  config.autoCheckUpdate = false
+  config.silentUpdate = false
+  config.autoQuitWithoutCoreMode = 'tray'
+  config.autoQuitWithoutCoreDelay =
+    typeof config.autoQuitWithoutCoreDelay === 'number' &&
+    Number.isFinite(config.autoQuitWithoutCoreDelay) &&
+    config.autoQuitWithoutCoreDelay >= 0
+      ? config.autoQuitWithoutCoreDelay
+      : 60
+  config.zoomFactor = normalizeZoomFactor(config.zoomFactor)
+  config.trafficHistoryRetentionDays =
+    typeof config.trafficHistoryRetentionDays === 'number' &&
+    Number.isInteger(config.trafficHistoryRetentionDays) &&
+    config.trafficHistoryRetentionDays >= 1 &&
+    config.trafficHistoryRetentionDays <= 3650
+      ? config.trafficHistoryRetentionDays
+      : 30
+  return config
+}

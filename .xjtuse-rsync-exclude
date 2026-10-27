@@ -1,0 +1,10 @@
+/extra/sidecar/
+/extra/files/sub-store.bundle.cjs
+/extra/files/sub-store-frontend/
+/extra/files/country.mmdb
+/extra/files/ASN.mmdb
+/extra/files/geoip.metadb
+/extra/files/geoip.dat
+/extra/files/geosite.dat
+/extra/files/BundleMRS.7z
+/src/renderer/src/assets/NotoColorEmoji.ttf

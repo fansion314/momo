@@ -27,6 +27,7 @@ import { decryptAgeContent } from '../utils/age'
 import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConfig'
 import { atomicWriteFile } from '../utils/safeFile'
 import { compileSimpleRuntime } from '../simple/service'
+import { applyHistoryConfig } from './history-config'
 import { evaluateDnsOverrideGuard, type DnsOverrideGuardResult } from './dnsOverrideGuard'
 
 const factoryLogger = createLogger('Factory')
@@ -237,6 +238,7 @@ export async function generateProfile(
     delete partialProfile['external-ui']
     delete partialProfile['external-ui-url']
   }
+  applyHistoryConfig(profile, appConfig)
   const nextRuntimeConfigStr = stringify(profile)
   const coreProfile = { ...profile }
   // 日志解析启动检测需要基础日志；预览和 Gist 保留用户的实际配置。

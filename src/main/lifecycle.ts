@@ -6,7 +6,6 @@ import { app, powerMonitor } from 'electron'
 import { stopCoreForExit, cleanupCoreWatcher } from './core/manager'
 import { primeAdminPrivilegesCache } from './core/admin'
 import { triggerSysProxy, disableSysProxySync } from './sys/sysproxy'
-import { closeTrafficUsage } from './traffic/recorder'
 import { exePath } from './utils/dirs'
 import { saveMainWindowState } from './window'
 
@@ -110,7 +109,7 @@ export function setupAppLifecycle(): void {
         sysProxyDisabled = true
       }
 
-      const cleanupTasks: Promise<unknown>[] = [stopCoreForExit(), closeTrafficUsage()]
+      const cleanupTasks: Promise<unknown>[] = [stopCoreForExit()]
       if (process.platform === 'darwin') {
         cleanupTasks.push(
           triggerSysProxy(false, { helperTimeout: 750, force: true }).then(() => {
@@ -119,15 +118,12 @@ export function setupAppLifecycle(): void {
         )
       }
 
-      // Give core teardown enough headroom to actually kill the child. On
-      // macOS releasing utun inside the kernel routinely takes 1-2s, and
-      // stopCoreForExit now waits for the core to exit (SIGINT then SIGKILL
-      // after coreShutdownTimeout=3s) before returning. A 1.2s window here
-      // would race that path and leave orphan mihomo processes behind, which
-      // is the root cause of the "multiple cores" symptom on macOS.
+      // The native history writer has up to five seconds to drain on SIGINT.
+      // Allow the normal six-second core shutdown budget and its SIGKILL
+      // fallback to finish before ending the main process.
       await withTimeout(
         Promise.allSettled(cleanupTasks).then(() => {}),
-        5000
+        14000
       )
     })()
 

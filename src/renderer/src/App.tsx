@@ -6,7 +6,6 @@ import { Button, Divider, Modal, ModalBody, ModalContent, ModalHeader } from '@h
 import { IoArrowForward, IoSettings } from 'react-icons/io5'
 import { toast } from '@renderer/components/base/toast'
 import routes, { useDeferredRoutePreload } from '@renderer/routes'
-import UpdaterButton from '@renderer/components/updater/updater-button'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import {
   applyTheme,
@@ -16,13 +15,11 @@ import {
 } from '@renderer/utils/ipc'
 import { platform } from '@renderer/utils/init'
 import { TitleBarOverlayOptions } from 'electron'
-import { useTrafficLogger } from '@renderer/hooks/use-traffic-logger'
 import { useDnsOverrideAutoDisabledNotice } from '@renderer/hooks/use-dns-override-notice'
 import { createTourDriver, getDriver, startTourIfNeeded } from '@renderer/utils/tour'
 import { hasPendingPluginFile, subscribePluginFile } from '@renderer/utils/plugin-file-open'
 import 'driver.js/dist/driver.css'
 import { useTranslation } from 'react-i18next'
-import { DEFAULT_ENABLE_TRAFFIC_LOGGER } from '../../shared/appConfig'
 import SiderItem from './components/sider/sider-item'
 import MihomoIcon from './components/base/mihomo-icon'
 import { getSiderCardByPath } from './utils/sider'
@@ -137,7 +134,6 @@ const App: React.FC = () => {
   const { appConfig, patchAppConfig } = useAppConfig()
   const hasAppConfig = Boolean(appConfig)
   const {
-    enableTrafficLogger = DEFAULT_ENABLE_TRAFFIC_LOGGER,
     appTheme = 'system',
     customTheme,
     useWindowFrame = false,
@@ -146,7 +142,6 @@ const App: React.FC = () => {
     lastSelectedSiderCard = 'proxy',
     rememberSelectedSiderCard = false
   } = appConfig || {}
-  useTrafficLogger(enableTrafficLogger)
   useDnsOverrideAutoDisabledNotice()
   const narrowWidth = platform === 'darwin' ? 70 : 60
   const [siderWidthValue, setSiderWidthValue] = useState(siderWidth)
@@ -330,16 +325,14 @@ const App: React.FC = () => {
                 className="sider-item-label text-lg font-bold"
                 aria-hidden={!siderExpandedOnHover}
               >
-                Clash Party
+                Clash Momo
               </span>
             </div>
             <Suspense fallback={<div className="min-h-0 flex-1" />}>
               <SiderCards iconOnly expanded={siderExpandedOnHover} />
             </Suspense>
             <div className="pt-2 pb-4 flex shrink-0 flex-col space-y-2">
-              <div className="flex justify-center">
-                <UpdaterButton iconOnly />
-              </div>
+              <div className="flex justify-center"></div>
               <div className="px-2 flex justify-center">
                 <OutboundModeSwitcher iconOnly expanded={siderExpandedOnHover} />
               </div>
@@ -363,9 +356,8 @@ const App: React.FC = () => {
               >
                 <div className="flex ml-1">
                   <MihomoIcon className="h-8 leading-8 text-lg mx-px" />
-                  <h3 className="text-lg font-bold leading-8">Clash Party</h3>
+                  <h3 className="text-lg font-bold leading-8">Clash Momo</h3>
                 </div>
-                <UpdaterButton />
                 <Button
                   size="sm"
                   className="app-nodrag"

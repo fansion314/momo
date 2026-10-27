@@ -3,9 +3,12 @@ import { readFileSync } from 'fs'
 import { BrowserWindow, Menu, screen, shell, type IpcMainEvent } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { normalizeZoomFactor } from '../shared/appConfig'
 import { getAppConfig } from './config'
-import { quitWithoutCore } from './core/manager'
-import { hideDockIcon, showDockIcon } from './resolve/tray'
+import { subscribeAppConfig } from './config/app'
+import { lightweightState, isLightweightMode } from './lightweight'
+import { destroyFloatingWindow, showFloatingWindow } from './resolve/floatingWindow'
+import { hideDockIcon, showDockIcon, showTrayIcon, closeTrayIcon } from './resolve/tray'
 import { dataDir } from './utils/dirs'
 import { mainWindowLogger } from './utils/logger'
 import { atomicWriteFileSync } from './utils/safeFile'
@@ -136,9 +139,9 @@ function waitForInitialContent(window: BrowserWindow): Promise<void> {
 const MAIN_WINDOW_CRASH_WINDOW = 60 * 1000
 const MAIN_WINDOW_MAX_CRASH_RECOVERIES = 3
 let mainWindowCrashTimestamps: number[] = []
-type AutoQuitWithoutCoreMode = NonNullable<IAppConfig['autoQuitWithoutCoreMode']>
 
 export async function createWindow(): Promise<void> {
+  if (isLightweightMode()) return
   if (mainWindow && !mainWindow.isDestroyed()) return
   if (createWindowPromise) return createWindowPromise
 
@@ -155,6 +158,7 @@ export function markInitialRendererReady(): void {
 async function createWindowWithRecovery(): Promise<void> {
   const maxCreateAttempts = 3
   for (let attempt = 1; attempt <= maxCreateAttempts; attempt++) {
+    if (isLightweightMode()) return
     try {
       await createWindowInternal()
       return
@@ -181,8 +185,10 @@ async function createWindowInternal(): Promise<void> {
     silentStart = false,
     autoQuitWithoutCore = false,
     autoQuitWithoutCoreDelay = 60,
-    autoQuitWithoutCoreMode = 'core'
+    zoomFactor = 1
   } = await getAppConfig()
+
+  if (isLightweightMode()) return
 
   windowState = ensureVisibleOnScreen(loadWindowState())
   const savedState = windowState
@@ -208,6 +214,7 @@ async function createWindowInternal(): Promise<void> {
     // Win 显式指定 icon，避免异常/恢复路径下任务栏与窗口图标依赖默认 exe
     ...(process.platform === 'linux' || process.platform === 'win32' ? { icon: icon } : {}),
     webPreferences: {
+      zoomFactor: normalizeZoomFactor(zoomFactor),
       preload: join(__dirname, '../preload/index.cjs'),
       spellcheck: false,
       sandbox: false,
@@ -239,10 +246,10 @@ async function createWindowInternal(): Promise<void> {
   }
 
   await initialContentPromise
-  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (!mainWindow || mainWindow.isDestroyed() || isLightweightMode()) return
 
   if (autoQuitWithoutCore && !mainWindow.isVisible()) {
-    scheduleQuitWithoutCore(autoQuitWithoutCoreDelay, autoQuitWithoutCoreMode)
+    scheduleQuitWithoutCore(autoQuitWithoutCoreDelay)
   }
 
   // 开发模式下始终显示窗口
@@ -258,7 +265,7 @@ function setupWindowEvents(window: BrowserWindow): void {
   window.webContents.on('render-process-gone', (_event, details) => {
     mainWindowLogger.error('Main window render process gone', details.reason).catch(() => {})
 
-    if (mainWindow !== window || window.isDestroyed()) return
+    if (mainWindow !== window || window.isDestroyed() || isLightweightMode()) return
 
     const wasVisible = window.isVisible()
 
@@ -311,7 +318,6 @@ function setupWindowEvents(window: BrowserWindow): void {
     const {
       autoQuitWithoutCore = false,
       autoQuitWithoutCoreDelay = 60,
-      autoQuitWithoutCoreMode = 'core',
       useDockIcon = true
     } = await getAppConfig()
 
@@ -320,8 +326,8 @@ function setupWindowEvents(window: BrowserWindow): void {
       hideDockIcon()
     }
 
-    if (autoQuitWithoutCore) {
-      scheduleQuitWithoutCore(autoQuitWithoutCoreDelay, autoQuitWithoutCoreMode)
+    if (autoQuitWithoutCore && !window.isDestroyed() && !window.isVisible()) {
+      scheduleQuitWithoutCore(autoQuitWithoutCoreDelay)
     }
   })
 
@@ -343,23 +349,61 @@ function setupWindowEvents(window: BrowserWindow): void {
   })
 }
 
-function scheduleQuitWithoutCore(
-  delaySeconds: number,
-  mode: AutoQuitWithoutCoreMode = 'core'
-): void {
-  clearQuitTimeout()
-  quitTimeout = setTimeout(async () => {
-    if (mode === 'tray') {
-      if (mainWindow && !mainWindow.isVisible()) {
-        mainWindow.destroy()
-        hideDockIcon()
-      }
-      return
-    }
+let lightweightEntry: Promise<void> | null = null
 
-    await quitWithoutCore()
-  }, delaySeconds * 1000)
+/** Release both renderer processes without restarting or detaching the kernel. */
+export function enterLightweightMode(): Promise<void> {
+  if (isLightweightMode()) return Promise.resolve()
+  if (lightweightEntry) return lightweightEntry
+  clearQuitTimeout()
+  const revision = lightweightState.requestEntry()
+  const entry = (async () => {
+    // A tray must exist before the final renderer can disappear, even if hidden in settings.
+    await showTrayIcon()
+    if (!lightweightState.enterIfCurrent(revision)) return
+    saveMainWindowState()
+    const window = mainWindow
+    mainWindow = null
+    window?.destroy()
+    destroyFloatingWindow()
+    hideDockIcon()
+  })().finally(() => {
+    if (lightweightEntry === entry) lightweightEntry = null
+  })
+  lightweightEntry = entry
+  return entry
 }
+
+function scheduleQuitWithoutCore(delaySeconds: number): void {
+  clearQuitTimeout()
+  quitTimeout = setTimeout(
+    () => {
+      quitTimeout = null
+      void getAppConfig()
+        .then(({ autoQuitWithoutCore }) => {
+          if (
+            autoQuitWithoutCore &&
+            mainWindow &&
+            !mainWindow.isDestroyed() &&
+            !mainWindow.isVisible()
+          ) {
+            return enterLightweightMode()
+          }
+          return undefined
+        })
+        .catch((error) => mainWindowLogger.error('Failed to enter lightweight mode', error))
+    },
+    Math.max(0, delaySeconds) * 1000
+  )
+}
+
+// A single subscription covers existing and recreated windows.
+subscribeAppConfig((config) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.setZoomFactor(normalizeZoomFactor(config.zoomFactor))
+  }
+  if (!config.autoQuitWithoutCore) clearQuitTimeout()
+})
 
 export function clearQuitTimeout(): void {
   if (quitTimeout) {
@@ -391,6 +435,17 @@ export function triggerMainWindow(force?: boolean): void {
 
 export function showMainWindow(): void {
   clearQuitTimeout()
+  const wasLightweight = isLightweightMode()
+  lightweightState.leave()
+  if (wasLightweight) {
+    void getAppConfig()
+      .then(async ({ showFloatingWindow: showFloating, disableTray }) => {
+        if (isLightweightMode()) return
+        if (showFloating) await showFloatingWindow()
+        if (disableTray && showFloating && !isLightweightMode()) await closeTrayIcon()
+      })
+      .catch((error) => mainWindowLogger.error('Failed to restore window settings', error))
+  }
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     clearQuitTimeout()
