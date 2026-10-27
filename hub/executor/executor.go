@@ -41,6 +41,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp/ntp"
 	"github.com/metacubex/mihomo/tunnel"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 )
 
 var mux sync.Mutex
@@ -86,6 +87,11 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
 	log.SetLevel(cfg.General.LogLevel)
+	// Initialize recording before listeners can accept their first connection.
+	// On reload, database initialization happens while the old tunnel is still running.
+	if err := statistic.DefaultManager.History().Configure(cfg.TrafficHistory, statistic.DefaultManager); err != nil {
+		log.Warnln("[TrafficHistory] configuration failed: %s", err)
+	}
 
 	tunnel.OnSuspend()
 
@@ -552,6 +558,9 @@ func closeSmart() {
 
 func Shutdown() {
 	listener.Cleanup()
+	if err := statistic.DefaultManager.History().Close(); err != nil {
+		log.Warnln("[TrafficHistory] %s", err)
+	}
 	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 

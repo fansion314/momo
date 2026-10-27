@@ -27,6 +27,7 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/smart/lightgbm"
 	"github.com/metacubex/mihomo/component/sniffer"
+	"github.com/metacubex/mihomo/component/traffic_history"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
@@ -217,6 +218,8 @@ type Config struct {
 	Tunnels       []LC.Tunnel
 	Sniffer       *sniffer.Config
 	TLS           *TLS
+
+	TrafficHistory traffic_history.Config
 }
 
 type RawCors struct {
@@ -409,6 +412,7 @@ type RawTLS struct {
 }
 
 type RawConfig struct {
+	TrafficHistory                traffic_history.Config  `yaml:"traffic-history" json:"traffic-history"`
 	Port                          int                     `yaml:"port" json:"port"`
 	SocksPort                     int                     `yaml:"socks-port" json:"socks-port"`
 	RedirPort                     int                     `yaml:"redir-port" json:"redir-port"`
@@ -493,6 +497,7 @@ func Parse(buf []byte) (*Config, error) {
 
 func DefaultRawConfig() *RawConfig {
 	return &RawConfig{
+		TrafficHistory:     traffic_history.DefaultConfig(),
 		AllowLan:           false,
 		BindAddress:        "*",
 		LanAllowedIPs:      []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")},
@@ -638,6 +643,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
+	if err := rawCfg.TrafficHistory.Validate(); err != nil {
+		return nil, err
+	}
+	config.TrafficHistory = rawCfg.TrafficHistory
 	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
 	startTime := time.Now()
 

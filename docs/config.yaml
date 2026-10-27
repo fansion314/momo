@@ -2873,3 +2873,9 @@ listeners:
 #  alpn:
 #    - h3
 #  max-udp-relay-packet-size: 1500
+# Optional native traffic history. See traffic-history.md for API/accounting details.
+# traffic-history:
+#   enable: true
+#   path: traffic-history.db
+#   sample-interval: 30s
+#   retention-days: 30

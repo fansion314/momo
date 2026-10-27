@@ -1,0 +1,32 @@
+name: mihomomo checks
+on:
+  push:
+    branches: ['mihomomo']
+  pull_request:
+    branches: ['mihomomo']
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm base-devel git go
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Run checks as an ordinary user
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- bash -e <<'CHECKS'
+          cd "$GITHUB_WORKSPACE"
+          go test -tags with_gvisor ./...
+          CHECKS

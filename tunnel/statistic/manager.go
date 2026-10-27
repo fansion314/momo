@@ -7,6 +7,7 @@ import (
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/xsync"
 	"github.com/metacubex/mihomo/component/memory"
+	"github.com/metacubex/mihomo/component/traffic_history"
 )
 
 var DefaultManager *Manager
@@ -26,6 +27,7 @@ func init() {
 }
 
 type Manager struct {
+	history       traffic_history.Service
 	connections   xsync.Map[string, Tracker]
 	smartTarget   xsync.Map[string, *xsync.Map[string, bool]]
 	uploadTemp    atomic.Int64
@@ -44,7 +46,16 @@ func (m *Manager) Join(c Tracker) {
 }
 
 func (m *Manager) Leave(c Tracker) {
-	m.connections.Delete(c.ID())
+	if recorder := m.history.Recorder(); recorder != nil {
+		recorder.OnLeave(func() (traffic_history.Record, bool) {
+			if stored, ok := m.connections.LoadAndDelete(c.ID()); ok {
+				return historyRecord(stored, true), true
+			}
+			return traffic_history.Record{}, false
+		})
+	} else {
+		m.connections.Delete(c.ID())
+	}
 	m.leaveSmartTarget(c)
 }
 
@@ -176,4 +187,3 @@ func (m *Manager) RangeSmartTarget(target string, fn func(id string) bool) {
 		})
 	}
 }
-

@@ -1,0 +1,26 @@
+pkgname=mihomomo
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Mihomo-based proxy core for Clash Momo'
+arch=('x86_64')
+url='https://github.com/fansion314/momo'
+license=('GPL-3.0-only')
+depends=('glibc' 'libcap')
+makedepends=('git' 'go')
+install=mihomomo.install
+source=("git+https://github.com/fansion314/momo.git#commit=@COMMIT@" 'mihomomo.install')
+sha256sums=('SKIP' '@INSTALL_SHA@')
+
+build() {
+  cd "$srcdir/momo"
+  CGO_ENABLED=0 GOAMD64=v1 go build -trimpath -tags with_gvisor -ldflags "-s -w -X github.com/metacubex/mihomo/constant.Version=$pkgver" -o mihomomo .
+}
+
+check() {
+  "$srcdir/momo/mihomomo" -v | grep -F "$pkgver"
+}
+
+package() {
+  install -Dm755 "$srcdir/momo/mihomomo" "$pkgdir/usr/bin/mihomomo"
+  install -Dm644 "$srcdir/momo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
