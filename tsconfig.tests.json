@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.node.json",
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/shared/**/*",
+    "src/renderer/src/utils/env.d.ts",
+    "src/preload/index.d.ts"
+  ],
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+    "composite": false,
+    "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "types": ["electron-vite/node", "vite/client"],
+    "paths": {
+      "@renderer/*": ["./src/renderer/src/*"]
+    }
+  }
+}
