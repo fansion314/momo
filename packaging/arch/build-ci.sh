@@ -40,7 +40,6 @@ test -s /usr/lib/clash-momo/resources/subStoreIcon.png
 test -s /usr/lib/clash-momo/resources/files/sub-store.bundle.cjs
 test -s /usr/lib/clash-momo/resources/files/country.mmdb
 test -s /usr/lib/clash-momo/resources/sidecar/sysproxy.linux-x64-gnu.node
-runuser -u builder -- bash "$root/packaging/arch/gui-smoke.sh"
 ! find /usr/lib/clash-momo -type f -name mihomomo | grep .
 cp "$package" /tmp/build-output/
 mkdir -p /tmp/bundle/aur/clash-momo

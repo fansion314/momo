@@ -25,7 +25,7 @@ clash-momo
 
 ## 构建和发布维护
 
-源码和发布共用 `fansion314/momo`：客户端维护在 `clash-momo` 分支，内核维护在 `mihomomo` 分支。首个版本的标签分别为 `clash-momo-v0.1.0-2` 和 `mihomomo-v0.1.0-2`；先发布内核。CI 在 Arch 中以普通用户运行检查、构建、安装和烟雾测试，然后签名软件包并发布配方包。发布需要 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
+源码和发布共用 `fansion314/momo`：客户端维护在 `clash-momo` 分支，内核维护在 `mihomomo` 分支。首个版本的标签分别为 `clash-momo-v0.1.0-2` 和 `mihomomo-v0.1.0-2`；先发布内核。CI 在 Arch 中以普通用户运行检查和构建，并验证安装、包签名、内核能力及系统 Electron 原生模块，然后签名软件包并发布配方包。图形启动与托盘行为在 xjtuse 原生桌面验收，不在 CI 重复执行。发布需要 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
 
 源码配方位于 `packaging/arch`。`scripts/prepare-arch.mjs` 对资源进行校验；MetaCubeX 地理数据的上游 `latest` 资源被替换时，校验会失败，需审阅后更新固定摘要。
 

@@ -46,22 +46,28 @@ jobs:
       source_sha: ${{ needs.resolve.outputs.commit }}
   build:
     needs: [resolve, checks]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     container:
       image: archlinux:latest
-      options: --cap-add=NET_ADMIN --cap-add=NET_RAW --cap-add=NET_BIND_SERVICE --security-opt seccomp=unconfined
+      options: --cap-add=NET_ADMIN --cap-add=NET_RAW --cap-add=NET_BIND_SERVICE
     steps:
-      - run: pacman -Syu --noconfirm base-devel git go nodejs pnpm unzip curl sudo libcap electron xorg-server-xvfb xorg-xauth
+      - run: pacman -Syu --noconfirm base-devel git go nodejs pnpm unzip curl sudo libcap electron
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.resolve.outputs.commit }}
+      - name: Check out the release orchestration used by this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
       - name: Build and install as ordinary user
         env:
           COMMIT: ${{ needs.resolve.outputs.commit }}
         run: |
           useradd -m builder
           echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
-          bash packaging/arch/build-ci.sh "$GITHUB_WORKSPACE" "$COMMIT"
+          bash .release-tools/packaging/arch/build-ci.sh "$GITHUB_WORKSPACE" "$COMMIT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: clash-momo-arch
