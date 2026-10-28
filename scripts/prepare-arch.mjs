@@ -33,12 +33,12 @@ const assets = [
     [
       'geoip.metadb',
       'geoip.metadb',
-      'f74179989befc93862f7bad4e32ac2ef2e1073b99b5c40483ec8007387df7362'
+      '63d7fa98f4ad57ee42e266836364f12d06fe124887f864937c7128bc4a0ad903'
     ],
     [
       'geosite.dat',
       'geosite.dat',
-      'c57333596b44aa061e84c3c224e97a4475c759a5e3baab1fcda002e48b4dc313'
+      'ba8968847bfb82a4f9b0c33da77b6d95f4f8fe1d7d3bb241a7ebac6c23b71631'
     ],
     ['geoip.dat', 'geoip.dat', 'a6271d3c96361d96156e6d3f7cf1550ef21b00d2f951deb772f464db91e89ac5'],
     [
@@ -49,7 +49,7 @@ const assets = [
     [
       'BundleMRS.7z',
       'BundleMRS.7z',
-      '7b589fc21774aa42c7f17d618635081e0de6a5e80f47a96ea3ba0b318da36f7f'
+      'eecd792bdec6f7c0fa35dca3f2f78a63b444c68af4b79ebf08c2cce64ee3164b'
     ]
   ].map(([file, name, hash]) => [
     `extra/files/${file}`,
