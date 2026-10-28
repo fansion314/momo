@@ -1,6 +1,6 @@
 {
   "name": "clash-momo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Arch Linux proxy client for Mihomomo",
   "type": "module",
   "main": "./out/main/index.js",
