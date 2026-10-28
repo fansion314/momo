@@ -28,10 +28,20 @@ jobs:
         env:
           TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          [[ "$TAG" =~ ^clash-momo-v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
+          # An unsuffixed tag is the first package revision for that version.
+          if [[ "$TAG" =~ ^clash-momo-v([0-9]+\.[0-9]+\.[0-9]+)-([0-9]+)$ ]]; then
+            tag_pkgver=${BASH_REMATCH[1]}
+            tag_pkgrel=${BASH_REMATCH[2]}
+          elif [[ "$TAG" =~ ^clash-momo-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            tag_pkgver=${BASH_REMATCH[1]}
+            tag_pkgrel=1
+          else
+            exit 1
+          fi
           pkgver=$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD)
           pkgrel=$(sed -n 's/^pkgrel=//p' packaging/arch/PKGBUILD)
-          test "$TAG" = "clash-momo-v${pkgver}-${pkgrel}"
+          test "$pkgver" = "$tag_pkgver"
+          test "$pkgrel" = "$tag_pkgrel"
           test "$(node -p 'require("./package.json").version')" = "$pkgver"
           git fetch origin clash-momo
           commit=$(git rev-parse HEAD)
