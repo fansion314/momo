@@ -102,8 +102,19 @@ function latencyColor(latency: number | null): string {
 const providers: { value: IPProvider; label: string }[] = [
   { value: 'ip.sb', label: 'IP.SB' },
   { value: 'ipwho.is', label: 'ipwho.is' },
-  { value: 'ipapi.is', label: 'ipapi.is' }
+  { value: 'ipapi.is', label: 'ipapi.is' },
+  { value: 'geojs', label: 'GeoJS' }
 ]
+
+const sourceLabels: Record<IPInfo['source'], string> = {
+  'ip.sb': 'IP.SB',
+  'ipwho.is': 'ipwho.is',
+  'ipapi.is': 'ipapi.is',
+  'ipapi.co': 'ipapi.co',
+  'skk.moe': 'SKK',
+  geojs: 'GeoJS',
+  Cloudflare: 'Cloudflare'
+}
 
 interface InfoRowProps {
   label: string
@@ -284,6 +295,7 @@ const IPInfoCard: React.FC = () => {
                 mono
               />
             )}
+            <InfoRow label={t('network.dataSource')} value={sourceLabels[ipInfo.source]} />
             {(ipInfo.isProxy !== undefined || ipInfo.isVPN !== undefined) && (
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[13px] text-foreground/60">

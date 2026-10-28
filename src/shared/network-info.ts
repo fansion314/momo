@@ -1,8 +1,10 @@
-export type IPProvider = 'ip.sb' | 'ipwho.is' | 'ipapi.is'
+export type IPProvider = 'ip.sb' | 'ipwho.is' | 'ipapi.is' | 'geojs'
+
+export type IPInfoSource = IPProvider | 'ipapi.co' | 'skk.moe' | 'Cloudflare'
 
 export interface IPInfo {
   ip: string
-  source: IPProvider | 'Cloudflare'
+  source: IPInfoSource
   country?: string
   countryCode?: string
   city?: string

@@ -31,7 +31,7 @@ describe('fetchIPInfo', () => {
       latitude: 1
     })
     expect(get).toHaveBeenCalledExactlyOnceWith('https://api.ip.sb/geoip', {
-      timeout: 8000,
+      timeout: 5000,
       responseType: 'text',
       headers: { 'User-Agent': 'Clash-Momo', Accept: 'application/json, text/plain' }
     })
@@ -82,6 +82,35 @@ describe('fetchIPInfo', () => {
     })
   })
 
+  it('normalizes GeoJS fields and numeric strings', async () => {
+    vi.mocked(get).mockResolvedValueOnce(
+      response(
+        JSON.stringify({
+          ip: '203.0.113.4',
+          country_code: 'HK',
+          country: 'Hong Kong',
+          city: 'Hong Kong',
+          region: 'Hong Kong',
+          asn: 789,
+          organization_name: 'Example Network',
+          timezone: 'Asia/Hong_Kong',
+          latitude: '22.2842',
+          longitude: '114.1759'
+        })
+      )
+    )
+    expect(await fetchIPInfo('geojs')).toMatchObject({
+      ip: '203.0.113.4',
+      source: 'geojs',
+      countryCode: 'HK',
+      asn: 789,
+      org: 'Example Network',
+      isp: 'Example Network',
+      latitude: 22.2842,
+      longitude: 114.1759
+    })
+  })
+
   it.each([
     ['TLS reset', new Error('net::ERR_CONNECTION_CLOSED')],
     ['non-JSON response', response('<html>Blocked</html>')],
@@ -90,23 +119,61 @@ describe('fetchIPInfo', () => {
     ['ipapi.is API error', response('{"error":"Quota exceeded"}')],
     ['invalid IP', response('{"ip":"not-an-ip"}')],
     ['missing IP', response('{}')]
-  ])('falls back to Cloudflare on %s', async (_name, primary) => {
-    if (primary instanceof Error) vi.mocked(get).mockRejectedValueOnce(primary)
-    else vi.mocked(get).mockResolvedValueOnce(primary)
-    vi.mocked(get).mockResolvedValueOnce(response(trace))
-    expect(await fetchIPInfo('ipwho.is')).toEqual({
+  ])('falls back to another full-info service on %s', async (_name, primary) => {
+    vi.mocked(get).mockImplementation(async (url) => {
+      if (url === 'https://ipwho.is/') {
+        if (primary instanceof Error) throw primary
+        return primary
+      }
+      if (url === 'https://get.geojs.io/v1/ip/geo.json') {
+        return response(
+          JSON.stringify({
+            ip: '203.0.113.5',
+            country_code: 'HK',
+            country: 'Hong Kong',
+            asn: 41378,
+            organization_name: 'Example Network'
+          })
+        )
+      }
+      throw new Error(`Unexpected endpoint: ${url}`)
+    })
+    expect(await fetchIPInfo('ipwho.is')).toMatchObject({
+      ip: '203.0.113.5',
+      countryCode: 'HK',
+      source: 'geojs',
+      asn: 41378
+    })
+    expect(
+      vi.mocked(get).mock.calls.some(([url]) => url === 'https://get.geojs.io/v1/ip/geo.json')
+    ).toBe(true)
+    expect(vi.mocked(get).mock.calls.some(([url]) => url.includes('cdn-cgi/trace'))).toBe(false)
+  })
+
+  it('uses Cloudflare only after every full-info service fails', async () => {
+    vi.mocked(get).mockImplementation(async (url) => {
+      if (url.includes('cdn-cgi/trace')) return response(trace)
+      throw new Error(`Unavailable endpoint: ${url}`)
+    })
+    expect(await fetchIPInfo('ip.sb')).toEqual({
       ip: '2001:db8::1',
       countryCode: 'HK',
       source: 'Cloudflare'
     })
-    expect(vi.mocked(get).mock.calls[1][0]).toBe('https://www.cloudflare.com/cdn-cgi/trace')
+    expect(vi.mocked(get).mock.calls.at(-1)?.[0]).toBe('https://www.cloudflare.com/cdn-cgi/trace')
   })
 
-  it('preserves both errors when the fallback also fails', async () => {
-    vi.mocked(get).mockRejectedValueOnce(new Error('net::ERR_CONNECTION_CLOSED'))
-    vi.mocked(get).mockResolvedValueOnce(response('ip=invalid\nloc=HK'))
-    await expect(fetchIPInfo('ip.sb')).rejects.toThrow(
-      'ip.sb: net::ERR_CONNECTION_CLOSED; Cloudflare: Cloudflare returned no valid IP address'
+  it('preserves provider and Cloudflare errors when every fallback fails', async () => {
+    vi.mocked(get).mockImplementation(async (url) => {
+      if (url.includes('cdn-cgi/trace')) return response('ip=invalid\nloc=HK')
+      if (url === 'https://api.ip.sb/geoip') throw new Error('net::ERR_CONNECTION_CLOSED')
+      throw new Error(`Unavailable endpoint: ${url}`)
+    })
+    const error = await fetchIPInfo('ip.sb').catch((reason: unknown) => reason)
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toContain('ip.sb: net::ERR_CONNECTION_CLOSED')
+    expect((error as Error).message).toContain(
+      'Cloudflare: Cloudflare returned no valid IP address'
     )
   })
 
