@@ -40,6 +40,7 @@ cp "$package" /tmp/bin-test/
 sed -i 's|https://github.com/fansion314/momo/releases/download/[^"]*/|file:///tmp/bin-test/|' /tmp/bin-test/PKGBUILD
 chown -R builder:builder /tmp/bin-test
 runuser -u builder -- bash -c 'cd /tmp/bin-test && makepkg --nodeps --noconfirm'
+pacman -Rdd --noconfirm mihomomo
 pacman -U --noconfirm /tmp/bin-test/mihomomo-bin-"$pkgver"-"$pkgrel"-x86_64.pkg.tar.zst
 getcap /usr/bin/mihomomo | grep -F 'cap_net_bind_service,cap_net_admin,cap_net_raw=ep'
 runuser -u builder -- /usr/bin/mihomomo -v | grep -F "$pkgver"
