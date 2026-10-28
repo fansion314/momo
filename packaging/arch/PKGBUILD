@@ -7,7 +7,7 @@ pkgdesc='Desktop client for mihomomo'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'
 license=('GPL-3.0-only')
-depends=('electron' 'mihomomo>=0.1.0' 'gtk3' 'libnotify' 'libsecret' 'xdg-utils' 'wl-clipboard')
+depends=('electron' 'mihomomo>=0.1.0' 'gtk3' 'libnotify' 'libsecret' 'xdg-utils' 'wl-clipboard' 'polkit')
 makedepends=('git' 'nodejs' 'pnpm' 'unzip')
 source=("git+https://github.com/fansion314/momo.git#commit=@COMMIT@" 'clash-momo' 'clash-momo.desktop')
 sha256sums=('SKIP' '@LAUNCHER_SHA@' '@DESKTOP_SHA@')
@@ -43,4 +43,5 @@ package() {
   install -Dm755 "$srcdir/clash-momo" "$pkgdir/usr/bin/clash-momo"
   install -Dm644 "$srcdir/clash-momo.desktop" "$pkgdir/usr/share/applications/world.fansionia.clash-momo.desktop"
   install -Dm644 "$srcdir/momo/resources/icon.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/world.fansionia.clash-momo.png"
+  install -Dm644 "$srcdir/momo/packaging/arch/49-clash-momo-resolved.rules" "$pkgdir/usr/share/polkit-1/rules.d/49-clash-momo-resolved.rules"
 }

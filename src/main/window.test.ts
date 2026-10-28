@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   config: { silentStart: false, zoomFactor: 1.25, autoQuitWithoutCore: false } as IAppConfig,
@@ -8,11 +8,13 @@ const mocks = vi.hoisted(() => ({
   destroyFloating: vi.fn(),
   showFloating: vi.fn(),
   configListeners: [] as ((config: IAppConfig) => void)[],
+  ozonePlatform: 'x11',
   windows: [] as unknown[],
   order: [] as string[]
 }))
 
 class TestWebContents extends EventEmitter {
+  send = vi.fn()
   setZoomFactor = vi.fn()
   setWindowOpenHandler = vi.fn()
   reload = vi.fn()
@@ -22,15 +24,31 @@ class TestWindow extends EventEmitter {
   webContents = new TestWebContents()
   visible = false
   destroyed = false
-  options: { webPreferences?: { zoomFactor?: number } }
-  constructor(options: { webPreferences?: { zoomFactor?: number } }) {
+  maximized = false
+  alwaysOnTop = false
+  options: Electron.BrowserWindowConstructorOptions
+  constructor(options: Electron.BrowserWindowConstructorOptions) {
     super()
     this.options = options
     mocks.windows.push(this)
   }
   isDestroyed = (): boolean => this.destroyed
   isVisible = (): boolean => this.visible
-  isMaximized = (): boolean => false
+  isMaximized = (): boolean => this.maximized
+  isAlwaysOnTop = (): boolean => this.alwaysOnTop
+  setAlwaysOnTop = vi.fn((value: boolean) => {
+    this.alwaysOnTop = value
+    this.emit('always-on-top-changed')
+  })
+  minimize = vi.fn()
+  maximize = (): void => {
+    this.maximized = true
+    this.emit('maximize')
+  }
+  unmaximize = (): void => {
+    this.maximized = false
+    this.emit('unmaximize')
+  }
   isMinimized = (): boolean => false
   isFullScreen = (): boolean => false
   getContentBounds = (): object => ({ width: 800, height: 600, x: 0, y: 0 })
@@ -59,6 +77,7 @@ class TestWindow extends EventEmitter {
 }
 
 vi.mock('electron', () => ({
+  app: { commandLine: { getSwitchValue: () => mocks.ozonePlatform } },
   BrowserWindow: TestWindow,
   Menu: { setApplicationMenu: vi.fn() },
   screen: { getAllDisplays: () => [{ bounds: { x: 0, y: 0, width: 2000, height: 1200 } }] },
@@ -102,13 +121,68 @@ beforeEach(() => {
   mocks.windows = []
   mocks.order = []
   mocks.configListeners = []
+  mocks.ozonePlatform = 'x11'
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 12; ++i) await Promise.resolve()
 }
 
 describe('renderer lifecycle', () => {
+  it('uses renderer controls on Linux and preserves the configured system title bar', async () => {
+    const window = await import('./window')
+    await window.createWindow()
+    const frameless = window.mainWindow as unknown as TestWindow
+    expect(frameless.options.frame).toBe(false)
+    expect(frameless.options.titleBarOverlay).toBe(false)
+    await window.enterLightweightMode()
+    mocks.config.useWindowFrame = true
+    window.showMainWindow()
+    await settle()
+    const framed = window.mainWindow as unknown as TestWindow
+    expect(framed.options.frame).toBe(true)
+    expect(framed.options.titleBarStyle).toBe('default')
+    expect(framed.options.titleBarOverlay).toBe(false)
+  })
+
+  it('minimizes, toggles maximize, and broadcasts actual native window state', async () => {
+    const window = await import('./window')
+    await window.createWindow()
+    const native = window.mainWindow as unknown as TestWindow
+    window.minimizeMainWindow()
+    expect(native.minimize).toHaveBeenCalledOnce()
+    expect(window.toggleMainWindowMaximized().maximized).toBe(true)
+    expect(window.toggleMainWindowMaximized().maximized).toBe(false)
+    expect(window.setMainWindowAlwaysOnTop(true).alwaysOnTop).toBe(true)
+    expect(native.setAlwaysOnTop).toHaveBeenCalledWith(true)
+    native.alwaysOnTop = false
+    native.emit('focus')
+    expect(native.webContents.send).toHaveBeenLastCalledWith('mainWindowStateChanged', {
+      maximized: false,
+      alwaysOnTop: false,
+      supportsAlwaysOnTop: true
+    })
+  })
+
+  it('does not advertise or call unsupported always-on-top on native Wayland', async () => {
+    mocks.ozonePlatform = 'wayland'
+    const window = await import('./window')
+    await window.createWindow()
+    const native = window.mainWindow as unknown as TestWindow
+    expect(window.getMainWindowState().supportsAlwaysOnTop).toBe(false)
+    expect(window.setMainWindowAlwaysOnTop(true).alwaysOnTop).toBe(false)
+    expect(native.setAlwaysOnTop).not.toHaveBeenCalled()
+  })
+
+  it('uses the explicit X11 backend even inside a Wayland session', async () => {
+    vi.stubEnv('XDG_SESSION_TYPE', 'wayland')
+    vi.stubEnv('WAYLAND_DISPLAY', 'wayland-0')
+    const window = await import('./window')
+    expect(window.getMainWindowState().supportsAlwaysOnTop).toBe(true)
+  })
+
   it('ensures the tray first, destroys both renderers, and recreates a single main window on reopen', async () => {
     const window = await import('./window')
     await window.createWindow()

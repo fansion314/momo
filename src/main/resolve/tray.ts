@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { extname, join } from 'path'
 import { app, ipcMain, Menu, nativeImage, shell, systemPreferences, Tray } from 'electron'
 import { t } from 'i18next'
-import { isLightweightMode } from '../lightweight'
+import { isLightweightMode, subscribeLightweightMode } from '../lightweight'
 import {
   changeCurrentProfile,
   getAppConfig,
@@ -44,9 +44,20 @@ import {
 import { trayLogger } from '../utils/logger'
 import { writeClipboardText } from '../utils/clipboard'
 import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
+import { createLightweightMenuItem } from './lightweight-menu'
 
 export let tray: Tray | null = null
 let trayMenu: Menu | null = null
+
+function refreshLightweightMenuState(): void {
+  const item = trayMenu?.getMenuItemById('quitWithoutCore')
+  if (!item || !tray || tray.isDestroyed()) return
+  item.checked = isLightweightMode()
+  // StatusNotifier menus need to be reapplied for checkbox changes to reach KDE.
+  if (process.platform === 'linux') tray.setContextMenu(trayMenu)
+}
+
+subscribeLightweightMode(refreshLightweightMenuState)
 // macOS 流量显示状态，避免异步读取配置导致的时序问题
 let macTrafficIconEnabled = false
 type TrayIconStatus = 'white' | 'blue' | 'green' | 'red'
@@ -377,13 +388,13 @@ export const buildContextMenu = async (): Promise<Menu> => {
           }
         },
     { type: 'separator' },
-    {
-      id: 'quitWithoutCore',
-      label: t('actions.lightMode.button'),
-      type: 'normal',
-      accelerator: quitWithoutCoreShortcut,
-      click: quitWithoutCore
-    },
+    createLightweightMenuItem(t('actions.lightMode.button'), quitWithoutCoreShortcut, {
+      isActive: isLightweightMode,
+      enter: quitWithoutCore,
+      leave: showMainWindow,
+      refresh: refreshLightweightMenuState,
+      onError: (error) => void trayLogger.error('Failed to toggle lightweight mode', error)
+    }),
     {
       id: 'restart',
       label: t('actions.restartApp'),

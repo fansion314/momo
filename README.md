@@ -14,6 +14,8 @@ clash-momo
 
 `clash-momo` 依赖 `mihomomo`（发布验收使用 `0.1.0-2`）和系统的 `electron`；可单独用 `sudo pacman -S mihomomo` 安装内核，并用 `mihomomo -v` 检查版本。应用使用 `/usr/bin/electron` 和唯一内核 `/usr/bin/mihomomo`，软件包不携带 Electron 或其他内核。内核包安装或升级时为该可执行文件设置网络能力，无需 setuid。系统托盘、系统代理和 TUN 的使用仍取决于桌面环境及系统配置。
 
+软件包还安装 systemd-resolved 的 polkit 规则，使本地活动会话中 `wheel` 组用户可以无密码修改默认 `Mihomo` 接口的 DNS、路由域和默认路由设置及恢复这些设置。该授权对接口名生效，并不限于本应用进程；其他接口和其他操作不在授权范围。它需要 systemd-resolved 向 polkit 提供接口详情的版本。自定义 TUN 接口名不会自动获授权，管理员可按实际名称自行配置精确的 polkit 规则；非 `wheel` 用户仍需正常认证。
+
 启动后导入配置或订阅，在应用中管理代理组、规则和系统代理。Sub-Store、覆写和 Smart 能力来自上游项目及配套内核。
 
 ## 窗口与流量历史

@@ -110,7 +110,16 @@ import {
   updateTrayIconImmediate
 } from '../resolve/tray'
 import { registerShortcut } from '../resolve/shortcut'
-import { closeMainWindow, mainWindow, showMainWindow, triggerMainWindow } from '../window'
+import {
+  closeMainWindow,
+  getMainWindowState,
+  mainWindow,
+  minimizeMainWindow,
+  setMainWindowAlwaysOnTop,
+  showMainWindow,
+  toggleMainWindowMaximized,
+  triggerMainWindow
+} from '../window'
 import {
   applyTheme,
   fetchThemes,
@@ -164,6 +173,7 @@ import {
 import { setOperationMode } from '../simple/mode'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
+import { fetchIPInfo } from './network-info'
 import { getAppInfo } from './app-info'
 import { logDir, rulePath } from './dirs'
 import { atomicWriteFile } from './safeFile'
@@ -214,11 +224,6 @@ async function getSmartOverrideContent(): Promise<string | null> {
   } catch {
     return null
   }
-}
-
-async function fetchIPInfo(url: string): Promise<unknown> {
-  const res = await httpGet<unknown>(url, { timeout: 10000, responseType: 'json' })
-  return res.data
 }
 
 async function measureLatency(url: string): Promise<number | null> {
@@ -424,8 +429,11 @@ const syncHandlers: Record<string, SyncFn> = {
   showMainWindow,
   closeMainWindow,
   triggerMainWindow,
-  setAlwaysOnTop: (alwaysOnTop: boolean) => mainWindow?.setAlwaysOnTop(alwaysOnTop),
-  isAlwaysOnTop: () => mainWindow?.isAlwaysOnTop(),
+  getMainWindowState,
+  minimizeMainWindow,
+  toggleMainWindowMaximized,
+  setAlwaysOnTop: setMainWindowAlwaysOnTop,
+  isAlwaysOnTop: () => getMainWindowState().alwaysOnTop,
   openDevTools: () => mainWindow?.webContents.openDevTools(),
   createHeapSnapshot: () => v8.writeHeapSnapshot(path.join(logDir(), `${Date.now()}.heapsnapshot`)),
   relaunchApp: () => {

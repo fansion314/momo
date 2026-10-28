@@ -1,9 +1,10 @@
 import { join } from 'path'
 import { readFileSync } from 'fs'
-import { BrowserWindow, Menu, screen, shell, type IpcMainEvent } from 'electron'
+import { app, BrowserWindow, Menu, screen, shell, type IpcMainEvent } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { normalizeZoomFactor } from '../shared/appConfig'
+import type { MainWindowState } from '../shared/window'
 import { getAppConfig } from './config'
 import { subscribeAppConfig } from './config/app'
 import { lightweightState, isLightweightMode } from './lightweight'
@@ -12,6 +13,7 @@ import { hideDockIcon, showDockIcon, showTrayIcon, closeTrayIcon } from './resol
 import { dataDir } from './utils/dirs'
 import { mainWindowLogger } from './utils/logger'
 import { atomicWriteFileSync } from './utils/safeFile'
+import { isWaylandSession } from './utils/wayland'
 
 interface WindowState {
   width: number
@@ -104,6 +106,34 @@ function ensureVisibleOnScreen(state: WindowState): WindowState {
 }
 
 export let mainWindow: BrowserWindow | null = null
+
+export function getMainWindowState(): MainWindowState {
+  const ozonePlatform = app.commandLine.getSwitchValue('ozone-platform')
+  const nativeWayland =
+    process.platform === 'linux' &&
+    (ozonePlatform === 'wayland' || (ozonePlatform !== 'x11' && isWaylandSession()))
+  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+  return {
+    maximized: window?.isMaximized() ?? false,
+    alwaysOnTop: !nativeWayland && (window?.isAlwaysOnTop() ?? false),
+    supportsAlwaysOnTop: !nativeWayland
+  }
+}
+
+export function setMainWindowAlwaysOnTop(alwaysOnTop: boolean): MainWindowState {
+  if (getMainWindowState().supportsAlwaysOnTop) mainWindow?.setAlwaysOnTop(alwaysOnTop)
+  return getMainWindowState()
+}
+
+export function minimizeMainWindow(): void {
+  mainWindow?.minimize()
+}
+
+export function toggleMainWindowMaximized(): MainWindowState {
+  if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+  else mainWindow?.maximize()
+  return getMainWindowState()
+}
 let quitTimeout: NodeJS.Timeout | null = null
 let createWindowPromise: Promise<void> | null = null
 let initialRendererReady = false
@@ -205,11 +235,13 @@ async function createWindowInternal(): Promise<void> {
     frame: useWindowFrame,
     fullscreenable: false,
     titleBarStyle: useWindowFrame ? 'default' : 'hidden',
-    titleBarOverlay: useWindowFrame
-      ? false
-      : {
-          height: 47
-        },
+    // Linux uses renderer controls with consistent sizing instead of theme-dependent WCO glyphs.
+    titleBarOverlay:
+      useWindowFrame || process.platform === 'linux'
+        ? false
+        : {
+            height: 47
+          },
     autoHideMenuBar: true,
     // Win 显式指定 icon，避免异常/恢复路径下任务栏与窗口图标依赖默认 exe
     ...(process.platform === 'linux' || process.platform === 'win32' ? { icon: icon } : {}),
@@ -261,6 +293,15 @@ async function createWindowInternal(): Promise<void> {
 }
 
 function setupWindowEvents(window: BrowserWindow): void {
+  const sendWindowState = (): void => {
+    if (mainWindow === window && !window.isDestroyed()) {
+      window.webContents.send('mainWindowStateChanged', getMainWindowState())
+    }
+  }
+  window.on('maximize', sendWindowState)
+  window.on('unmaximize', sendWindowState)
+  window.on('always-on-top-changed', sendWindowState)
+  window.on('focus', sendWindowState)
   // renderer 崩溃时外壳仍在（isDestroyed() 为 false）、did-fail-load 不触发，会白屏；销毁并按需重建
   window.webContents.on('render-process-gone', (_event, details) => {
     mainWindowLogger.error('Main window render process gone', details.reason).catch(() => {})

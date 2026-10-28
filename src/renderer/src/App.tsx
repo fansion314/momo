@@ -187,7 +187,7 @@ const App: React.FC = () => {
   }, [navigate])
 
   const setTitlebar = useCallback((): void => {
-    if (!useWindowFrame && platform !== 'darwin') {
+    if (!useWindowFrame && platform === 'win32') {
       const options = { height: 47 } as TitleBarOverlayOptions
       try {
         options.color = window.getComputedStyle(document.documentElement).backgroundColor

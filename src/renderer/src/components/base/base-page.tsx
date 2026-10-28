@@ -1,10 +1,8 @@
-import { Button, Divider } from '@heroui/react'
+import { Divider } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { platform } from '@renderer/utils/init'
-import { isAlwaysOnTop, setAlwaysOnTop } from '@renderer/utils/ipc'
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { RiPushpin2Fill, RiPushpin2Line } from 'react-icons/ri'
-import { useTranslation } from 'react-i18next'
+import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import WindowControls from './window-controls'
 
 interface Props {
   title?: React.ReactNode
@@ -12,22 +10,14 @@ interface Props {
   children?: React.ReactNode
   contentClassName?: string
 }
-let saveOnTop = false
 
 const BasePage = forwardRef<HTMLDivElement, Props>((props, ref) => {
-  const { t } = useTranslation()
   const { appConfig } = useAppConfig()
   const { useWindowFrame = false } = appConfig || {}
   const [overlayWidth, setOverlayWidth] = React.useState(0)
-  const [onTop, setOnTop] = useState(saveOnTop)
-
-  const updateAlwaysOnTop = async (): Promise<void> => {
-    setOnTop(await isAlwaysOnTop())
-    saveOnTop = await isAlwaysOnTop()
-  }
 
   useEffect(() => {
-    if (platform !== 'darwin' && !useWindowFrame) {
+    if (platform === 'win32' && !useWindowFrame) {
       try {
         // @ts-ignore windowControlsOverlay
         const windowControlsOverlay = window.navigator.windowControlsOverlay
@@ -50,27 +40,9 @@ const BasePage = forwardRef<HTMLDivElement, Props>((props, ref) => {
           <div className="title min-w-0 h-full truncate whitespace-nowrap text-lg leading-8">
             {props.title}
           </div>
-          <div style={{ marginRight: overlayWidth }} className="header flex gap-1 h-full">
+          <div style={{ marginRight: overlayWidth }} className="header flex gap-1 h-full shrink-0">
             {props.header}
-            <Button
-              size="sm"
-              className="app-nodrag"
-              isIconOnly
-              title={t('common.pinWindow')}
-              variant="light"
-              color={onTop ? 'primary' : 'default'}
-              onPress={async () => {
-                await setAlwaysOnTop(!onTop)
-                await updateAlwaysOnTop()
-              }}
-              startContent={
-                onTop ? (
-                  <RiPushpin2Fill className="text-lg" />
-                ) : (
-                  <RiPushpin2Line className="text-lg" />
-                )
-              }
-            />
+            <WindowControls />
           </div>
         </div>
 

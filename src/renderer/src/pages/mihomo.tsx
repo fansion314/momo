@@ -4,6 +4,7 @@ import { toast } from '@renderer/components/base/toast'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { isValidListenAddress, getError, isValid } from '@renderer/utils/validate'
+import { needsControllerRestart } from '@renderer/utils/controller-config'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { platform } from '@renderer/utils/init'
@@ -151,7 +152,9 @@ const Mihomo: React.FC = () => {
   const onChangeNeedRestart = async (patch: Partial<IMihomoConfig>): Promise<void> => {
     await patchControledMihomoConfig(patch)
     try {
-      if (appConfig?.useHotReloadProfile) {
+      // The core reloads proxy settings, but its controller server is only
+      // configured at process startup.
+      if (appConfig?.useHotReloadProfile && !needsControllerRestart(patch)) {
         await mihomoHotReloadConfig()
       } else {
         await restartCore()

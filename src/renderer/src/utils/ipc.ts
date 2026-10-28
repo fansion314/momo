@@ -1,4 +1,6 @@
 import { TitleBarOverlayOptions } from 'electron'
+import type { IPInfo, IPProvider } from '../../../shared/network-info'
+import type { MainWindowState } from '../../../shared/window'
 import type {
   HistoryEndpoint,
   HistoryQuery,
@@ -245,7 +247,10 @@ interface IpcApi {
   showFloatingWindow: () => Promise<void>
   closeFloatingWindow: () => Promise<void>
   showContextMenu: () => Promise<void>
-  setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<void>
+  getMainWindowState: () => Promise<MainWindowState>
+  minimizeMainWindow: () => Promise<void>
+  toggleMainWindowMaximized: () => Promise<MainWindowState>
+  setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<MainWindowState>
   isAlwaysOnTop: () => Promise<boolean>
   openDevTools: () => Promise<void>
   createHeapSnapshot: () => Promise<void>
@@ -263,7 +268,7 @@ interface IpcApi {
   getGistUrl: () => Promise<string>
   generateGistAgeKeyPair: () => Promise<{ secretKey: string; recipient: string }>
   exportGistAgeSecretKey: () => Promise<boolean>
-  fetchIPInfo: (url: string) => Promise<unknown>
+  fetchIPInfo: (provider: IPProvider) => Promise<IPInfo>
   measureLatency: (url: string) => Promise<number | null>
   getImageDataURL: (url: string) => Promise<string>
   relaunchApp: () => Promise<void>
@@ -437,6 +442,9 @@ export const {
   showContextMenu,
   setAlwaysOnTop,
   isAlwaysOnTop,
+  getMainWindowState,
+  minimizeMainWindow,
+  toggleMainWindowMaximized,
   openDevTools,
   createHeapSnapshot,
   // Shortcut

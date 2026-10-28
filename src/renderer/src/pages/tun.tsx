@@ -4,7 +4,12 @@ import { showErrorSync } from '@renderer/utils/error-display'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
-import { grantTunPermissions, restartCore, setupFirewall } from '@renderer/utils/ipc'
+import {
+  grantTunPermissions,
+  mihomoHotReloadConfig,
+  restartCore,
+  setupFirewall
+} from '@renderer/utils/ipc'
 import { platform } from '@renderer/utils/init'
 import { ipCIDRValidator } from '@renderer/utils/validate'
 import React, { Key, useState } from 'react'
@@ -95,11 +100,12 @@ const Tun: React.FC = () => {
     }
     try {
       await patchControledMihomoConfig({ ...patch, tun: tunPatch })
-      await restartCore()
+      // The partial PATCH can fail independently of writing the configuration.
+      // Reload the full effective configuration; unchanged TUN settings are not recreated.
+      if (appConfig?.operationMode !== 'simple') await mihomoHotReloadConfig()
+      setChanged(false)
     } catch (e) {
       showErrorSync(e, t('common.error.updateCoreConfigFailed'))
-    } finally {
-      setChanged(false)
     }
   }
 

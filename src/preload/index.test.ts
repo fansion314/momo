@@ -25,3 +25,21 @@ it('allows the Linux application lookup through the renderer and preload bridge'
   await expect(getAppInfo(metadata)).resolves.toEqual(info)
   expect(invoke).toHaveBeenCalledWith('getAppInfo', metadata)
 })
+
+it('allows custom window controls and native state through the renderer bridge', async () => {
+  Object.defineProperty(process, 'contextIsolated', { configurable: true, value: true })
+  await import('./index')
+  const api = expose.mock.calls.find(([name]) => name === 'electron')?.[1]
+  vi.stubGlobal('window', { electron: api })
+  const controls = await import('../renderer/src/utils/ipc')
+  const state = { maximized: true, alwaysOnTop: false, supportsAlwaysOnTop: false }
+  invoke.mockResolvedValue(state)
+  await expect(controls.getMainWindowState()).resolves.toEqual(state)
+  expect(invoke).toHaveBeenLastCalledWith('getMainWindowState')
+  await expect(controls.toggleMainWindowMaximized()).resolves.toEqual(state)
+  expect(invoke).toHaveBeenLastCalledWith('toggleMainWindowMaximized')
+  await controls.minimizeMainWindow()
+  expect(invoke).toHaveBeenLastCalledWith('minimizeMainWindow')
+  await expect(controls.setAlwaysOnTop(true)).resolves.toEqual(state)
+  expect(invoke).toHaveBeenLastCalledWith('setAlwaysOnTop', true)
+})

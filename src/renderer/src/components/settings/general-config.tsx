@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import { toast } from '@renderer/components/base/toast'
 import {
   Button,
@@ -61,6 +61,7 @@ const customTrayIconStateKeys: (keyof ICustomTrayIcons)[] = ['off', 'sysProxy', 
 
 const GeneralConfig: React.FC = () => {
   const { t, i18n } = useTranslation()
+  const zoomHelpId = useId()
   const { data: enable = false, mutate: mutateEnable } = useSWR('checkAutoRun', checkAutoRun)
   const { appConfig, patchAppConfig } = useAppConfig()
   const [customThemes, setCustomThemes] = useState<{ key: string; label: string }[]>()
@@ -718,38 +719,43 @@ const GeneralConfig: React.FC = () => {
         )}
 
         <SettingItem title={t('settings.zoomFactor')} divider>
-          <Input
-            key={zoomFactor}
-            size="sm"
-            className="w-48"
-            aria-label={t('settings.zoomFactor')}
-            description={t('settings.zoomFactorHelp')}
-            defaultValue={`${Math.round(zoomFactor * 100)}%`}
-            onBlur={async (event) => {
-              const value = parseZoomFactor(event.target.value)
-              if (value === null) {
-                event.target.value = `${Math.round(zoomFactor * 100)}%`
-                return
-              }
-              await patchAppConfig({ zoomFactor: value })
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur()
-              if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                event.preventDefault()
-                const current = parseZoomFactor(event.currentTarget.value) ?? zoomFactor
-                const next = Math.min(
-                  2,
-                  Math.max(
-                    0.5,
-                    Math.round((current + (event.key === 'ArrowUp' ? 0.01 : -0.01)) * 100) / 100
+          <div className="flex items-center gap-3">
+            <span id={zoomHelpId} className="text-xs text-default-400 whitespace-nowrap">
+              {t('settings.zoomFactorHelp')}
+            </span>
+            <Input
+              key={zoomFactor}
+              size="sm"
+              className="w-48 shrink-0"
+              aria-label={t('settings.zoomFactor')}
+              aria-describedby={zoomHelpId}
+              defaultValue={`${Math.round(zoomFactor * 100)}%`}
+              onBlur={async (event) => {
+                const value = parseZoomFactor(event.target.value)
+                if (value === null) {
+                  event.target.value = `${Math.round(zoomFactor * 100)}%`
+                  return
+                }
+                await patchAppConfig({ zoomFactor: value })
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur()
+                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                  event.preventDefault()
+                  const current = parseZoomFactor(event.currentTarget.value) ?? zoomFactor
+                  const next = Math.min(
+                    2,
+                    Math.max(
+                      0.5,
+                      Math.round((current + (event.key === 'ArrowUp' ? 0.01 : -0.01)) * 100) / 100
+                    )
                   )
-                )
-                event.currentTarget.value = `${Math.round(next * 100)}%`
-                void patchAppConfig({ zoomFactor: next })
-              }
-            }}
-          />
+                  event.currentTarget.value = `${Math.round(next * 100)}%`
+                  void patchAppConfig({ zoomFactor: next })
+                }
+              }}
+            />
+          </div>
         </SettingItem>
         <SettingItem title={t('settings.useWindowFrame')} divider>
           <Switch

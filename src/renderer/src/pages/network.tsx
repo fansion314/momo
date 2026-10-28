@@ -26,30 +26,7 @@ import { useTranslation } from 'react-i18next'
 import { fetchIPInfo, measureLatency } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { DEFAULT_NETWORK_INFO_CARD_ORDER } from '../../../shared/appConfig'
-
-type IPProvider = 'ip.sb' | 'ipwho.is' | 'ipapi.is'
-
-interface IPInfo {
-  ip: string
-  country?: string
-  countryCode?: string
-  city?: string
-  region?: string
-  asn?: number
-  org?: string
-  isp?: string
-  isProxy?: boolean
-  isVPN?: boolean
-  timezone?: string
-  latitude?: number
-  longitude?: number
-}
-
-const IP_ENDPOINTS: Record<IPProvider, string> = {
-  'ip.sb': 'https://api.ip.sb/geoip',
-  'ipwho.is': 'https://ipwho.is/',
-  'ipapi.is': 'https://api.ipapi.is/'
-}
+import type { IPInfo, IPProvider } from '../../../shared/network-info'
 
 const CountryFlag: React.FC<{ code?: string; className?: string }> = ({ code, className }) => {
   if (!code || code.length !== 2) return null
@@ -59,54 +36,6 @@ const CountryFlag: React.FC<{ code?: string; className?: string }> = ({ code, cl
       style={{ fontSize: '1rem', lineHeight: 1 }}
     />
   )
-}
-
-function parseProvider(provider: IPProvider, data: Record<string, unknown>): IPInfo {
-  if (provider === 'ip.sb') {
-    return {
-      ip: data.ip as string,
-      country: data.country as string | undefined,
-      countryCode: data.country_code as string | undefined,
-      city: data.city as string | undefined,
-      asn: data.asn as number | undefined,
-      org: data.asn_organization as string | undefined,
-      latitude: data.latitude as number | undefined,
-      longitude: data.longitude as number | undefined
-    }
-  }
-  if (provider === 'ipwho.is') {
-    const conn = data.connection as Record<string, unknown> | undefined
-    const tz = data.timezone as Record<string, unknown> | undefined
-    return {
-      ip: data.ip as string,
-      country: data.country as string | undefined,
-      countryCode: data.country_code as string | undefined,
-      city: data.city as string | undefined,
-      region: data.region as string | undefined,
-      asn: conn?.asn as number | undefined,
-      org: conn?.org as string | undefined,
-      isp: conn?.isp as string | undefined,
-      timezone: tz?.id as string | undefined,
-      latitude: data.latitude as number | undefined,
-      longitude: data.longitude as number | undefined
-    }
-  }
-  const loc = data.location as Record<string, unknown> | undefined
-  const asn = data.asn as Record<string, unknown> | undefined
-  return {
-    ip: data.ip as string,
-    country: loc?.country as string | undefined,
-    countryCode: loc?.country_code as string | undefined,
-    city: loc?.city as string | undefined,
-    region: loc?.state as string | undefined,
-    asn: asn?.asn as number | undefined,
-    org: asn?.org as string | undefined,
-    isProxy: data.is_proxy as boolean | undefined,
-    isVPN: data.is_vpn as boolean | undefined,
-    timezone: loc?.timezone as string | undefined,
-    latitude: loc?.latitude as number | undefined,
-    longitude: loc?.longitude as number | undefined
-  }
 }
 
 // ─── Latency ───────────────────────────────────────────────────────────────
@@ -463,12 +392,14 @@ const IPPage: React.FC = () => {
       setLoading(true)
       setError(null)
       try {
-        const data = await fetchIPInfo(IP_ENDPOINTS[target])
+        const data = await fetchIPInfo(target)
         if (currentFetchId !== fetchIdRef.current) return
-        setIpInfo(parseProvider(target, data as Record<string, unknown>))
+        setIpInfo(data)
       } catch (e) {
         if (currentFetchId !== fetchIdRef.current) return
-        setError(e instanceof Error ? e.message : t('network.fetchFailed'))
+        setError(
+          e instanceof Error ? e.message : typeof e === 'string' ? e : t('network.fetchFailed')
+        )
         setIpInfo(null)
       } finally {
         if (currentFetchId === fetchIdRef.current) {
@@ -586,13 +517,16 @@ const IPPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {ipInfo.country && (
+                      {ipInfo.source === 'Cloudflare' && (
+                        <p className="text-[12px] text-foreground/60">{t('network.ipFallback')}</p>
+                      )}
+                      {(ipInfo.country || ipInfo.countryCode) && (
                         <InfoRow
                           label={t('network.country')}
                           value={
                             <span className="flex items-center justify-end gap-1.5">
                               <CountryFlag code={ipInfo.countryCode} />
-                              <span>{ipInfo.country}</span>
+                              <span>{ipInfo.country ?? ipInfo.countryCode}</span>
                             </span>
                           }
                         />

@@ -164,6 +164,9 @@ const validInvokeChannels = [
   'setTitleBarOverlay',
   'setAlwaysOnTop',
   'isAlwaysOnTop',
+  'getMainWindowState',
+  'minimizeMainWindow',
+  'toggleMainWindowMaximized',
   'openDevTools',
   'createHeapSnapshot',
   'relaunchApp',
@@ -204,7 +207,8 @@ const validListenChannels = [
   'updateDownloadProgress',
   'pluginConfigUpdated',
   'openPluginFile',
-  'dnsOverrideAutoDisabled'
+  'dnsOverrideAutoDisabled',
+  'mainWindowStateChanged'
 ] as const
 
 // 允许的 send channels 白名单
