@@ -35,4 +35,4 @@ clash-momo
 
 ## 致谢与许可
 
-Clash Momo 基于 [Clash Party](https://github.com/mihomo-party-org/clash-party)，配套内核基于 [Mihomo Smart](https://github.com/vernesong/mihomo) 及其 [Mihomo](https://github.com/MetaCubeX/mihomo) 上游。感谢所有上游项目和贡献者。本项目与上游项目无关联，按 [GPL-3.0](LICENSE) 发布。
+Clash Momo 基于 [Clash Party](https://github.com/mihomo-party-org/clash-party)，配套内核基于 [Mihomo Smart](https://github.com/vernesong/mihomo) 及其 [Mihomo](https://github.com/MetaCubeX/mihomo) 上游。网络信息布局与解锁检测移植自 [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev)，适配本项目的 Electron 与 HeroUI 实现。感谢所有上游项目和贡献者。本项目与上游项目无关联，按 [GPL-3.0](LICENSE) 发布。

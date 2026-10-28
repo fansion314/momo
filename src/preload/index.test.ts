@@ -43,3 +43,15 @@ it('allows custom window controls and native state through the renderer bridge',
   await expect(controls.setAlwaysOnTop(true)).resolves.toEqual(state)
   expect(invoke).toHaveBeenLastCalledWith('setAlwaysOnTop', true)
 })
+
+it('allows named media checks through the preload allowlist', async () => {
+  Object.defineProperty(process, 'contextIsolated', { configurable: true, value: true })
+  await import('./index')
+  const api = expose.mock.calls.find(([name]) => name === 'electron')?.[1]
+  vi.stubGlobal('window', { electron: api })
+  const { checkMediaUnlockItem } = await import('../renderer/src/utils/ipc')
+  const result = { name: 'Netflix', status: 'Yes', region: 'SG', check_time: '2026-10-28 12:00:00' }
+  invoke.mockResolvedValue(result)
+  await expect(checkMediaUnlockItem('Netflix')).resolves.toEqual(result)
+  expect(invoke).toHaveBeenLastCalledWith('checkMediaUnlockItem', 'Netflix')
+})

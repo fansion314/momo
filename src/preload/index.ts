@@ -186,6 +186,7 @@ const validInvokeChannels = [
   'generateGistAgeKeyPair',
   'exportGistAgeSecretKey',
   'fetchIPInfo',
+  'checkMediaUnlockItem',
   'measureLatency',
   'getImageDataURL',
   'getAppInfo',

@@ -597,9 +597,9 @@ const NetworkTopologyCard: React.FC = () => {
   }
 
   return (
-    <div className="rounded-xl border border-foreground/10 bg-content1 p-4 shadow-sm">
+    <div className="rounded-xl border border-foreground/10 bg-content1 p-3 shadow-sm">
       {/* Header */}
-      <div className="mb-3.5 flex items-center justify-between gap-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/15 text-success">
             <IoGitNetworkOutline size={18} />
@@ -641,7 +641,7 @@ const NetworkTopologyCard: React.FC = () => {
       </div>
 
       {/* Legend */}
-      <div className="mb-3 flex flex-wrap gap-3 text-[12px] text-foreground/60">
+      <div className="mb-2 flex flex-wrap gap-3 text-[12px] text-foreground/60">
         <span className="flex items-center gap-1">
           <IoGitNetworkOutline className="text-success" size={13} />
           {t('network.topology.proxyGroups')}

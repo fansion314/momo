@@ -1,5 +1,6 @@
 import { TitleBarOverlayOptions } from 'electron'
 import type { IPInfo, IPProvider } from '../../../shared/network-info'
+import type { MediaUnlockItem, MediaUnlockName } from '../../../shared/media-unlock'
 import type { MainWindowState } from '../../../shared/window'
 import type {
   HistoryEndpoint,
@@ -269,6 +270,7 @@ interface IpcApi {
   generateGistAgeKeyPair: () => Promise<{ secretKey: string; recipient: string }>
   exportGistAgeSecretKey: () => Promise<boolean>
   fetchIPInfo: (provider: IPProvider) => Promise<IPInfo>
+  checkMediaUnlockItem: (name: MediaUnlockName) => Promise<MediaUnlockItem>
   measureLatency: (url: string) => Promise<number | null>
   getImageDataURL: (url: string) => Promise<string>
   relaunchApp: () => Promise<void>
@@ -462,6 +464,7 @@ export const {
   generateGistAgeKeyPair,
   exportGistAgeSecretKey,
   fetchIPInfo,
+  checkMediaUnlockItem,
   measureLatency,
   getImageDataURL,
   relaunchApp,

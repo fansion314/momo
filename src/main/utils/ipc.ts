@@ -174,6 +174,7 @@ import { setOperationMode } from '../simple/mode'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { fetchIPInfo } from './network-info'
+import { checkMediaUnlockItem } from './media-unlock'
 import { getAppInfo } from './app-info'
 import { logDir, rulePath } from './dirs'
 import { atomicWriteFile } from './safeFile'
@@ -406,6 +407,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   generateGistAgeKeyPair,
   exportGistAgeSecretKey,
   fetchIPInfo,
+  checkMediaUnlockItem,
   measureLatency,
   getImageDataURL,
   readImageFileDataURL,
