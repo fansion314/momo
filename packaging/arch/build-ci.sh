@@ -26,4 +26,21 @@ runuser -u builder -- /usr/bin/mihomomo -v | grep -F "$pkgver"
 cp "$package" /tmp/build-output/
 mkdir -p /tmp/bundle/aur/mihomomo
 cp /tmp/recipe/{PKGBUILD,.SRCINFO,mihomomo.install} /tmp/bundle/aur/mihomomo/
+mkdir -p /tmp/bundle/aur/mihomomo-bin
+sed -e "s/@PKGVER@/$pkgver/g" -e "s/@PKGREL@/$pkgrel/g" \
+    -e "s/@PACKAGE_SHA@/$(sha256sum "$package" | cut -d' ' -f1)/g" \
+    "$root/packaging/arch/PKGBUILD-bin" > /tmp/bundle/aur/mihomomo-bin/PKGBUILD
+cp /tmp/recipe/mihomomo.install /tmp/bundle/aur/mihomomo-bin/
+chown -R builder:builder /tmp/bundle
+runuser -u builder -- bash -c 'cd /tmp/bundle/aur/mihomomo-bin && makepkg --printsrcinfo > .SRCINFO'
+# Exercise the exact recipe against the just-built bytes before release exists.
+mkdir -p /tmp/bin-test
+cp -a /tmp/bundle/aur/mihomomo-bin/. /tmp/bin-test/
+cp "$package" /tmp/bin-test/
+sed -i 's|https://github.com/fansion314/momo/releases/download/[^"]*/|file:///tmp/bin-test/|' /tmp/bin-test/PKGBUILD
+chown -R builder:builder /tmp/bin-test
+runuser -u builder -- bash -c 'cd /tmp/bin-test && makepkg --nodeps --noconfirm'
+pacman -U --noconfirm /tmp/bin-test/mihomomo-bin-"$pkgver"-"$pkgrel"-x86_64.pkg.tar.zst
+getcap /usr/bin/mihomomo | grep -F 'cap_net_bind_service,cap_net_admin,cap_net_raw=ep'
+runuser -u builder -- /usr/bin/mihomomo -v | grep -F "$pkgver"
 tar -C /tmp/bundle -czf /tmp/build-output/mihomomo-aur.tar.gz aur
