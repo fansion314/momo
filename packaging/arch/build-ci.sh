@@ -57,6 +57,7 @@ cp "$package" /tmp/bin-test/
 sed -i 's|https://github.com/fansion314/momo/releases/download/[^"]*/|file:///tmp/bin-test/|' /tmp/bin-test/PKGBUILD
 chown -R builder:builder /tmp/bin-test
 runuser -u builder -- bash -c 'cd /tmp/bin-test && makepkg --nodeps --noconfirm'
+pacman -Rdd --noconfirm clash-momo
 pacman -U --noconfirm /tmp/bin-test/clash-momo-bin-"$pkgver"-"$pkgrel"-x86_64.pkg.tar.zst
 runuser -u builder -- env ELECTRON_RUN_AS_NODE=1 /usr/bin/electron -e 'process.chdir("/usr/lib/clash-momo"); require("/usr/lib/clash-momo/node_modules/sysproxy-rs")'
 tar -C /tmp/bundle -czf /tmp/build-output/clash-momo-aur.tar.gz aur
