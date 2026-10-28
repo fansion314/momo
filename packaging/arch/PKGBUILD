@@ -1,8 +1,8 @@
 export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 pkgname=clash-momo
-pkgver=0.1.0
-pkgrel=3
+pkgver=0.1.1
+pkgrel=1
 pkgdesc='Desktop client for mihomomo'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'
