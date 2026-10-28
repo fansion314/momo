@@ -44,4 +44,19 @@ test -s /usr/lib/clash-momo/resources/sidecar/sysproxy.linux-x64-gnu.node
 cp "$package" /tmp/build-output/
 mkdir -p /tmp/bundle/aur/clash-momo
 cp /tmp/recipe/{PKGBUILD,.SRCINFO,clash-momo,clash-momo.desktop} /tmp/bundle/aur/clash-momo/
+mkdir -p /tmp/bundle/aur/clash-momo-bin
+sed -e "s/@PKGVER@/$pkgver/g" -e "s/@PKGREL@/$pkgrel/g" \
+    -e "s/@PACKAGE_SHA@/$(sha256sum "$package" | cut -d' ' -f1)/g" \
+    "$root/packaging/arch/PKGBUILD-bin" > /tmp/bundle/aur/clash-momo-bin/PKGBUILD
+chown -R builder:builder /tmp/bundle
+runuser -u builder -- bash -c 'cd /tmp/bundle/aur/clash-momo-bin && makepkg --printsrcinfo > .SRCINFO'
+# Exercise the exact recipe against the just-built bytes before release exists.
+mkdir -p /tmp/bin-test
+cp -a /tmp/bundle/aur/clash-momo-bin/. /tmp/bin-test/
+cp "$package" /tmp/bin-test/
+sed -i 's|https://github.com/fansion314/momo/releases/download/[^"]*/|file:///tmp/bin-test/|' /tmp/bin-test/PKGBUILD
+chown -R builder:builder /tmp/bin-test
+runuser -u builder -- bash -c 'cd /tmp/bin-test && makepkg --nodeps --noconfirm'
+pacman -U --noconfirm /tmp/bin-test/clash-momo-bin-"$pkgver"-"$pkgrel"-x86_64.pkg.tar.zst
+runuser -u builder -- env ELECTRON_RUN_AS_NODE=1 /usr/bin/electron -e 'process.chdir("/usr/lib/clash-momo"); require("/usr/lib/clash-momo/node_modules/sysproxy-rs")'
 tar -C /tmp/bundle -czf /tmp/build-output/clash-momo-aur.tar.gz aur
