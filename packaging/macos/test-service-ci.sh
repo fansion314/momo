@@ -9,10 +9,16 @@ version=${tag#mihomomo-v}
 archive="mihomomo-${version}-macos-arm64-r${revision}.tar.gz"
 stage=$(mktemp -d)
 trap 'sudo "/Library/PrivilegedHelperTools/world.fansionia.clash-momo.helper" uninstall || true; rm -rf "$stage"' EXIT
-for attempt in {1..30}; do
-  if gh release view "$tag" -R fansion314/momo >/dev/null 2>&1; then break; fi
-  if (( attempt == 30 )); then echo "Required core release is unavailable: $tag" >&2; exit 1; fi
-  echo "Waiting for required core release $tag (attempt $attempt/30)"
+for attempt in {1..120}; do
+  if gh release view "$tag" -R fansion314/momo --json isDraft,assets | node -e '
+    const fs = require("node:fs")
+    const release = JSON.parse(fs.readFileSync(0, "utf8"))
+    const names = new Set(release.assets.map(asset => asset.name))
+    const archive = process.argv[1]
+    if (release.isDraft || !names.has(archive) || !names.has(archive + ".sha256")) process.exit(1)
+  ' "$archive"; then break; fi
+  if (( attempt == 120 )); then echo "Required core release is unavailable: $tag" >&2; exit 1; fi
+  echo "Waiting for required core release $tag (attempt $attempt/120)"
   sleep 10
 done
 gh release download "$tag" -R fansion314/momo -p "$archive" -p "$archive.sha256" -D "$stage"
