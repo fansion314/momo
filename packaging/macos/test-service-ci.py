@@ -73,9 +73,23 @@ assert subprocess.run(['sudo', '-u', 'nobody', '/usr/bin/curl', '--max-time', '2
                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
 request('POST', '/v1/core/config', {'config': config, 'files': []}, token)
 request('POST', '/v1/lease', {}, token)
+# Verify the root permission path with a real utun device, while leaving the
+# runner's default routes and system DNS untouched.
+existing = subprocess.check_output(['/sbin/ifconfig', '-l'], text=True).split()
+device = next('utun' + str(n) for n in range(200, 250) if 'utun' + str(n) not in existing)
+tun_config = config.replace('tun:\n  enable: false', 'tun:\n  enable: true\n  device: ' + device +
+                            '\n  stack: system\n  auto-route: false\n  auto-detect-interface: false')
+request('POST', '/v1/core/config', {'config': tun_config, 'files': []}, token)
+deadline = time.monotonic() + 10
+while device not in subprocess.check_output(['/sbin/ifconfig', '-l'], text=True).split():
+    assert time.monotonic() < deadline, 'managed root core did not create its utun device'
+    request('POST', '/v1/lease', {}, token)
+    time.sleep(.25)
+request('POST', '/v1/lease', {}, token)
 # Without lease renewal a live privileged core must be stopped by the daemon.
 deadline = time.monotonic() + 25
 while request('GET', '/v1/status')['running']:
     assert time.monotonic() < deadline, 'expired lease left privileged core running'
     time.sleep(.5)
-print('Real service UID, snapshot, core API, reload, and lease checks passed')
+assert device not in subprocess.check_output(['/sbin/ifconfig', '-l'], text=True).split(), 'utun device leaked after core exit'
+print('Real service UID, snapshot, core API, reload, utun creation/cleanup, and lease checks passed')
