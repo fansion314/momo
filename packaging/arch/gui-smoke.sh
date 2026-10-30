@@ -54,6 +54,8 @@ CONFIG
 setsid xvfb-run -a /usr/bin/clash-momo >"$smoke_dir/app.log" 2>&1 &
 app_group=$!
 uid=$(id -u)
+expected_core_version=$(/usr/bin/mihomomo --momo-capabilities |
+  node -e 'let d="";process.stdin.on("data",x=>d+=x);process.stdin.on("end",()=>console.log(JSON.parse(d).version))')
 for ((attempt=0; attempt<90; attempt++)); do
   if ! kill -0 "$app_group" 2>/dev/null; then
     echo 'Clash Momo exited before its core became ready' >&2
@@ -69,7 +71,7 @@ for ((attempt=0; attempt<90; attempt++)); do
       continue
     fi
     if curl -fsS --max-time 2 --unix-socket "$socket" http://localhost/version |
-      node -e 'let d="";process.stdin.on("data",x=>d+=x);process.stdin.on("end",()=>{if(JSON.parse(d).version!=="0.1.0") process.exit(1)})' &&
+      node -e 'let d="";process.stdin.on("data",x=>d+=x);process.stdin.on("end",()=>{if(JSON.parse(d).version!==process.argv[1]) process.exit(1)})' "$expected_core_version" &&
       curl -fsS --max-time 2 --unix-socket "$socket" http://localhost/traffic-history/status |
       node -e 'let d="";process.stdin.on("data",x=>d+=x);process.stdin.on("end",()=>{let s=JSON.parse(d);if(s.enabled!==true||s.ready!==true) process.exit(1)})'; then
       echo 'System Electron started Mihomomo and traffic history is ready.'
