@@ -661,20 +661,28 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	return rawCfg, nil
 }
 
+// Helper authorization is enforced by UID-bound IPC and the session token.
+// The authenticated reverse proxy strips Authorization and native Unix routing
+// does not use a bearer secret. Keep the effective configuration consistent with
+// that existing boundary instead of retaining an unused subscription secret.
+func enforceHelperControllerPolicy(rawCfg *RawConfig, socket string) {
+	rawCfg.ExternalController = ""
+	rawCfg.ExternalControllerTLS = ""
+	rawCfg.ExternalControllerPipe = ""
+	rawCfg.ExternalControllerUnix = socket
+	rawCfg.ExternalUI = ""
+	rawCfg.ExternalUIURL = ""
+	rawCfg.ExternalUIName = ""
+	rawCfg.Secret = ""
+}
+
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	if err := C.ValidateMomoWorkTree(); err != nil {
 		return nil, err
 	}
 	if C.MomoManaged() {
 		rawCfg.NTP.WriteToSystem = false
-		// Controllers are always supplied by the helper, including on reload.
-		rawCfg.ExternalController = ""
-		rawCfg.ExternalControllerTLS = ""
-		rawCfg.ExternalControllerPipe = ""
-		rawCfg.ExternalControllerUnix = C.MomoManagedSocket()
-		rawCfg.ExternalUI = ""
-		rawCfg.ExternalUIURL = ""
-		rawCfg.ExternalUIName = ""
+		enforceHelperControllerPolicy(rawCfg, C.MomoManagedSocket())
 	}
 
 	if rawCfg.TiziStateDir != "" {

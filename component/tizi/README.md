@@ -49,7 +49,8 @@ The HTTP API uses device Ed25519 signatures, UUID replay nonces and SHA-256 body
 hashes. Only HTTPS origins are accepted, except HTTP loopback for integration
 fixtures. Redirects are forbidden and HTTP errors are sanitized.
 
-Status returns `supported`, `keyReady`, `logged_in`, account and device metadata,
+Status returns `supported`, `keyReady`, `logged_in`, `managed_config_version: 2`,
+account and device metadata,
 `subscription` (Caddy's upload/download/total/expire), `health` (stable string),
 `health_details`, `last_sync_at` and `pending_days` when available. Header counters
 come from Caddy and remain separate from self-reported payload counters.
@@ -66,6 +67,18 @@ The application's on-disk runtime contains only `tizi-managed: {state-dir: ...}`
 and a limited set of general network/history settings. The native parser expands
 its encrypted inline subscription in memory. Proxy-provider caches, scripts,
 server listeners and public/TLS controllers and external dashboards are forbidden.
+The nested `tizi-managed.smart` policy accepts only `enabled`, `useLightGBM`,
+`collectData` booleans and an integer `collectorSize` from 1 to 100000 (default100).
+It transforms automatic groups in memory, preserves ordering and explicit rules,
+and updates references without executing scripts. Safe DNS/hosts/sniffer and
+Geo/LGBM settings follow the client controls. Final disabled or missing DNS
+clears TUN DNS hijacking; Smart adds literal node IP route exclusions only inside
+the core. None of these transformations rewrites the encrypted subscription.
+Applications must require managed configuration version2 before enabling the
+new structured policy, including the core copied into the privileged helper.
+Control-plane HTTP uses the core's existing real-IP proxy-host resolver and
+socket binding; standalone native commands use the existing system resolver
+before proxy DNS is initialized, with no new DNS-server overrides.
 The core operates with local Unix/pipe control only. Managed root helpers must
 use the fixed sibling `tizi` state directory outside imported snapshots and run
 bridge commands through the authenticated helper; do not copy the ledger.

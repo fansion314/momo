@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -87,7 +86,8 @@ func callContext(ctx context.Context, id *identity, origin, method, path string,
 		req.Header.Set("X-Tizi-Nonce", nonce)
 		req.Header.Set("X-Tizi-Signature", base64.StdEncoding.EncodeToString(ed25519.Sign(id.PrivateKey, []byte(input))))
 	}
-	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("Tizi redirects are forbidden") }, Transport: &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second, Resolver: &net.Resolver{PreferGo: true}}).DialContext, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 20 * time.Second}}
+	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("Tizi redirects are forbidden") }, Transport: &http.Transport{Proxy: nil, DialContext: serviceDialContext, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 20 * time.Second}}
+	defer client.CloseIdleConnections()
 	resp, e := client.Do(req)
 	if e != nil {
 		return nil, nil, errors.New("Tizi service is unreachable; cached subscription remains available")
@@ -150,7 +150,7 @@ func refreshContext(ctx context.Context, dir string, id *identity) error {
 }
 func status(dir string) (map[string]any, error) {
 	_, _, keyErr := keyRing()
-	out := map[string]any{"supported": true, "keyReady": keyErr == nil, "logged_in": false}
+	out := map[string]any{"supported": true, "keyReady": keyErr == nil, "logged_in": false, "managed_config_version": 2}
 	if keyErr != nil {
 		return out, nil
 	}

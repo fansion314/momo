@@ -341,6 +341,10 @@ func ExpandConfig(buf []byte) ([]byte, string, error) {
 	if !ok {
 		return nil, "", errors.New("Invalid tizi-managed wrapper")
 	}
+	smartPolicy, policyErr := managedSmartPolicy(m)
+	if policyErr != nil {
+		return nil, "", policyErr
+	}
 	dir, _ := m["state-dir"].(string)
 	if e := validateDir(dir); e != nil {
 		return nil, "", e
@@ -364,7 +368,7 @@ func ExpandConfig(buf []byte) ([]byte, string, error) {
 	if e = yaml.Unmarshal([]byte(sub.YAML), &base); e != nil {
 		return nil, "", errors.New("Invalid cached tizi subscription")
 	}
-	allowed := map[string]bool{"mixed-port": true, "port": true, "socks-port": true, "redir-port": true, "tproxy-port": true, "allow-lan": true, "bind-address": true, "mode": true, "ipv6": true, "log-level": true, "find-process-mode": true, "tun": true, "dns": true, "sniffer": true, "hosts": true, "traffic-history": true, "external-controller-unix": true, "external-controller-pipe": true, "external-controller": true, "secret": true, "profile": true, "unified-delay": true, "tcp-concurrent": true, "skip-auth-prefixes": true, "lan-allowed-ips": true, "lan-disallowed-ips": true, "authentication": true, "interface-name": true}
+	allowed := map[string]bool{"mixed-port": true, "port": true, "socks-port": true, "redir-port": true, "tproxy-port": true, "allow-lan": true, "bind-address": true, "mode": true, "ipv6": true, "log-level": true, "find-process-mode": true, "tun": true, "dns": true, "sniffer": true, "hosts": true, "traffic-history": true, "external-controller-unix": true, "external-controller-pipe": true, "external-controller": true, "secret": true, "profile": true, "unified-delay": true, "tcp-concurrent": true, "skip-auth-prefixes": true, "lan-allowed-ips": true, "lan-disallowed-ips": true, "authentication": true, "interface-name": true, "geodata-mode": true, "geo-auto-update": true, "geo-update-interval": true, "geox-url": true, "lgbm-auto-update": true, "lgbm-update-interval": true, "lgbm-url": true}
 	for k, v := range wrapper {
 		if k == "tizi-managed" {
 			continue
@@ -372,8 +376,13 @@ func ExpandConfig(buf []byte) ([]byte, string, error) {
 		if !allowed[k] {
 			return nil, "", fmt.Errorf("Managed tizi override %q is not allowed", k)
 		}
-		base[k] = v
+		base[k] = mergeManagedSetting(base[k], v)
 	}
+	if err := applySmart(base, smartPolicy); err != nil {
+		return nil, "", err
+	}
+	ensureSmartTunExcludes(base, smartPolicy.Enabled)
+	clearDisabledDNSHijack(base)
 	delete(base, "tizi-managed")
 	if _, ok := base["proxy-providers"]; ok {
 		return nil, "", errors.New("Managed proxy provider caches are forbidden")

@@ -16,7 +16,7 @@ test ! -u "$stage/bin/mihomomo"
 "$stage/bin/mihomomo" --momo-capabilities | python3 -c \
   'import json,sys;v=json.load(sys.stdin);assert v["protocol"]==1 and v["managedMode"] and v["version"]==sys.argv[1]' "$pkgver"
 "$stage/bin/mihomomo" tizi --state-dir "$stage/tizi-capability-check" status <<<'{}' | python3 -c \
-  'import json,os,sys;v=json.load(sys.stdin);assert v["ok"] and v["data"]["supported"];assert not os.environ.get("TIZI_BUILD_KEYS") or v["data"]["keyReady"]'
+  'import json,os,sys;v=json.load(sys.stdin);assert v["ok"] and v["data"]["supported"] and v["data"].get("managed_config_version",0)>=2;assert not os.environ.get("TIZI_BUILD_KEYS") or v["data"]["keyReady"]'
 python3 - "$stage" "$pkgver" "$tag" "$revision" <<'PY'
 import hashlib,json,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1])

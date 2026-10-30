@@ -101,7 +101,7 @@ func TestEnrollmentFetchesHeaderAndProtectsCache(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]string{"email": in["email"], "device_id": in["device_id"]})
 		case "/v1/subscription":
 			w.Header().Set("Subscription-Userinfo", "upload=123; download=456; total=10000; expire=2000000000")
-			_, _ = w.Write([]byte("proxies: []\nrules: [MATCH,DIRECT]\n"))
+			_, _ = w.Write([]byte("proxies: []\nrules: [\"MATCH,DIRECT\"]\n"))
 		default:
 			w.WriteHeader(404)
 		}
@@ -218,5 +218,18 @@ func TestDelayedReceiptDoesNotHideNewlyClosedDay(t *testing.T) {
 	}
 	if state.ReportCutoff == SettlementDay(receivedAt) {
 		t.Fatal("late receipt suppressed new day report")
+	}
+}
+
+func TestManagedConfigVersionAvailableBeforeLogin(t *testing.T) {
+	before := BuildKeys
+	BuildKeys = ""
+	t.Cleanup(func() { BuildKeys = before })
+	result, err := status(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["managed_config_version"] != 2 || result["logged_in"] != false || result["keyReady"] != false {
+		t.Fatal("new policy capability unavailable before key configuration/login")
 	}
 }

@@ -2,7 +2,7 @@ export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 pkgname=mihomomo
 pkgver=1.19.33
-pkgrel=2
+pkgrel=3
 pkgdesc='Mihomo-based proxy core for Clash Momo'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'
@@ -21,6 +21,8 @@ build() {
 
 check() {
   "$srcdir/momo/mihomomo" -v | grep -F "$pkgver"
+  printf '%s' '{}' | "$srcdir/momo/mihomomo" tizi --state-dir "$srcdir/tizi-capability-check" status | python3 -c \
+    'import json,sys;v=json.load(sys.stdin);assert v["ok"] and v["data"]["supported"] and v["data"]["keyReady"] and v["data"].get("managed_config_version",0)>=2'
 }
 
 package() {
