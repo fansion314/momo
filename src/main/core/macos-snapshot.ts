@@ -80,7 +80,7 @@ export async function createMacCoreSnapshot(
         relative.startsWith('../') ||
         path.isAbsolute(relative)
       )
-        throw new Error('Snapshot directory changed during import')
+        throw new Error('Snapshot source directory changed')
     }
   }
   await rememberDirectory(sourceRoot)
@@ -111,7 +111,7 @@ export async function createMacCoreSnapshot(
       const after = await handle.stat()
       await verifyAncestors()
       if (length !== stat.size || after.size !== stat.size || after.mtimeMs !== stat.mtimeMs)
-        throw new Error('Snapshot file changed during import')
+        throw new Error('Snapshot source file changed')
       return buffer.subarray(0, length)
     } finally {
       await handle.close()
