@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: fansion314/packages
-          ref: 1d2c2968b4a9b736769ff6428adb4f3c899bb8f6
+          ref: 708c7a597893e9a1361bdbb87674d840da928b5a
           path: .distribution
           persist-credentials: false
       - name: Start the actual app with its Homebrew core
