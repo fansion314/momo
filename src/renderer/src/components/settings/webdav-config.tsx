@@ -13,6 +13,8 @@ import WebdavRestoreModal from './webdav-restore-modal'
 const WebdavConfig: React.FC = () => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
+  const backupDisabled =
+    typeof __TIZI_ENABLED__ !== 'undefined' && __TIZI_ENABLED__ && appConfig?.tiziActive === true
   const {
     webdavUrl,
     webdavUsername,
@@ -64,6 +66,13 @@ const WebdavConfig: React.FC = () => {
   )
   useEffect(() => () => setWebdavDebounce.cancel(), [setWebdavDebounce])
 
+  useEffect(() => {
+    if (backupDisabled) {
+      setRestoreOpen(false)
+      setWebdavDebounce.cancel()
+    }
+  }, [backupDisabled, setWebdavDebounce])
+
   const handleBackup = async (): Promise<void> => {
     setBackuping(true)
     try {
@@ -96,8 +105,14 @@ const WebdavConfig: React.FC = () => {
         <WebdavRestoreModal filenames={filenames} onClose={() => setRestoreOpen(false)} />
       )}
       <SettingCard title={t('webdav.title')}>
+        {backupDisabled && (
+          <p role="status" className="px-2 py-2 text-sm text-warning">
+            团购订阅使用期间已暂停 WebDAV 备份与同步，原有设置保留。
+          </p>
+        )}
         <SettingItem title={t('webdav.url')} divider>
           <Input
+            isDisabled={backupDisabled}
             size="sm"
             className="w-[60%]"
             value={webdav.webdavUrl}
@@ -109,6 +124,7 @@ const WebdavConfig: React.FC = () => {
         </SettingItem>
         <SettingItem title={t('webdav.dir')} divider>
           <Input
+            isDisabled={backupDisabled}
             size="sm"
             className="w-[60%]"
             value={webdav.webdavDir}
@@ -120,6 +136,7 @@ const WebdavConfig: React.FC = () => {
         </SettingItem>
         <SettingItem title={t('webdav.username')} divider>
           <Input
+            isDisabled={backupDisabled}
             size="sm"
             className="w-[60%]"
             value={webdav.webdavUsername}
@@ -131,6 +148,7 @@ const WebdavConfig: React.FC = () => {
         </SettingItem>
         <SettingItem title={t('webdav.password')} divider>
           <Input
+            isDisabled={backupDisabled}
             size="sm"
             className="w-[60%]"
             type="password"
@@ -143,6 +161,7 @@ const WebdavConfig: React.FC = () => {
         </SettingItem>
         <SettingItem title={t('webdav.maxBackups')} divider>
           <Select
+            isDisabled={backupDisabled}
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
             className="w-37.5"
             size="sm"
@@ -165,6 +184,7 @@ const WebdavConfig: React.FC = () => {
         </SettingItem>
         <SettingItem title={t('webdav.ignoreCert')} divider>
           <Switch
+            isDisabled={backupDisabled}
             size="sm"
             isSelected={webdav.webdavIgnoreCert}
             onValueChange={(v) => {
@@ -177,6 +197,7 @@ const WebdavConfig: React.FC = () => {
           <div className="flex w-[60%] gap-2">
             {webdavBackupCron !== webdav.webdavBackupCron && (
               <Button
+                isDisabled={backupDisabled}
                 size="sm"
                 color="primary"
                 onPress={async () => {
@@ -199,6 +220,7 @@ const WebdavConfig: React.FC = () => {
               </Button>
             )}
             <Input
+              isDisabled={backupDisabled}
               size="sm"
               value={webdav.webdavBackupCron}
               placeholder={t('webdav.backup.cron.placeholder')}
@@ -209,10 +231,18 @@ const WebdavConfig: React.FC = () => {
           </div>
         </SettingItem>
         <div className="flex justify-between">
-          <Button isLoading={backuping} fullWidth size="sm" className="mr-1" onPress={handleBackup}>
+          <Button
+            isDisabled={backupDisabled}
+            isLoading={backuping}
+            fullWidth
+            size="sm"
+            className="mr-1"
+            onPress={handleBackup}
+          >
             {t('webdav.backup')}
           </Button>
           <Button
+            isDisabled={backupDisabled}
             isLoading={restoring}
             fullWidth
             size="sm"

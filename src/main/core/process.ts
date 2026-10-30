@@ -189,11 +189,43 @@ export async function validateWindowsPipeAccess(pipePath: string): Promise<void>
   }
 }
 
-export async function waitForCoreReady(): Promise<void> {
-  for (let i = 0; i < CORE_READY_MAX_RETRIES; i++) {
+export async function waitForCoreReady(timeoutMs?: number, managed = false): Promise<void> {
+  const attempts =
+    timeoutMs === undefined
+      ? CORE_READY_MAX_RETRIES
+      : Math.max(1, Math.ceil(timeoutMs / CORE_READY_RETRY_INTERVAL_MS))
+  for (let i = 0; i < attempts; i++) {
     try {
       const axios = await getAxios(true)
       await axios.get('/')
+      if (managed) {
+        await axios.get('/configs')
+        const response = await axios.get<never, { proxies?: Record<string, { type?: string }> }>(
+          '/proxies'
+        )
+        const builtins = new Set([
+          'direct',
+          'reject',
+          'rejectdrop',
+          'compatible',
+          'pass',
+          'passrule',
+          'selector',
+          'urltest',
+          'fallback',
+          'loadbalance',
+          'relay',
+          'smart'
+        ])
+        if (
+          !Object.values(response.proxies ?? {}).some(
+            (proxy) =>
+              typeof proxy?.type === 'string' &&
+              !builtins.has(proxy.type.toLowerCase().replace(/[^a-z]/g, ''))
+          )
+        )
+          throw new Error('Managed subscription outbounds are not ready')
+      }
       managerLogger.info(
         `Core ready after ${i + 1} attempts (${(i + 1) * CORE_READY_RETRY_INTERVAL_MS}ms)`
       )
@@ -203,9 +235,9 @@ export async function waitForCoreReady(): Promise<void> {
         managerLogger.info('Waiting for core to be ready...')
       }
 
-      if (i === CORE_READY_MAX_RETRIES - 1) {
+      if (i === attempts - 1) {
         throw new Error(
-          `Core not ready after ${CORE_READY_MAX_RETRIES} attempts (${CORE_READY_MAX_RETRIES * CORE_READY_RETRY_INTERVAL_MS}ms)`
+          `Core not ready after ${attempts} attempts (${attempts * CORE_READY_RETRY_INTERVAL_MS}ms)`
         )
       }
 

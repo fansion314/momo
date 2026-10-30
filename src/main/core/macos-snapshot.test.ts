@@ -51,4 +51,17 @@ describe('protected service snapshots', () => {
       createMacCoreSnapshot(root, path.join(root, 'config.yaml'), '/protected')
     ).rejects.toThrow('symbolic links')
   })
+  it('preserves the service-owned account path outside snapshot data and strips remote listeners', async () => {
+    const configPath = path.join(root, 'config.yaml')
+    await writeFile(
+      configPath,
+      `tizi-managed:\n  state-dir: /protected-service/tizi\nexternal-controller: 0.0.0.0:9090\nexternal-controller-tls: :9091\nexternal-controller-cors:\n  allow-origins: ['*']\nexternal-ui: dashboard\nexternal-ui-url: https://example.invalid/ui\nsecret: private-controller\n`
+    )
+    const snapshot = await createMacCoreSnapshot(root, configPath, '/protected-service/data')
+    expect(parse(snapshot.config)).toEqual({
+      'tizi-managed': { 'state-dir': '/protected-service/tizi' }
+    })
+    expect(snapshot.files).toEqual([])
+    expect(snapshot.config).not.toContain('private-controller')
+  })
 })

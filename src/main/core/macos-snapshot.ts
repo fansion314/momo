@@ -137,6 +137,7 @@ export async function createMacCoreSnapshot(
   for (const key of [
     'external-controller',
     'external-controller-tls',
+    'external-controller-cors',
     'external-controller-unix',
     'external-ui',
     'external-ui-url',

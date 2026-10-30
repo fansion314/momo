@@ -123,6 +123,7 @@ const ProfileCard: React.FC<Props> = (props) => {
                   isIconOnly
                   size="sm"
                   title={t('sider.cards.viewRuntimeConfig')}
+                  isDisabled={info.type === 'managed'}
                   variant="light"
                   color="default"
                   onPress={() => {
@@ -155,7 +156,7 @@ const ProfileCard: React.FC<Props> = (props) => {
                 )}
               </div>
             </div>
-            {info.type === 'remote' && extra && (
+            {(info.type === 'remote' || info.type === 'managed') && extra && (
               <div
                 className={`mt-2 flex justify-between ${match ? 'text-primary-foreground' : 'text-foreground'} `}
               >
@@ -188,7 +189,14 @@ const ProfileCard: React.FC<Props> = (props) => {
               </div>
             )}
           </CardBody>
-          <CardFooter className="pt-0">
+          <CardFooter
+            className={`pt-0 ${info.type === 'managed' ? 'flex-col items-start gap-2' : ''}`}
+          >
+            {info.type === 'managed' && (
+              <Chip size="sm" variant="bordered">
+                受保护 · 只读订阅
+              </Chip>
+            )}
             {info.type === 'remote' && !extra && (
               <div
                 className={`w-full mt-2 flex justify-between ${match ? 'text-primary-foreground' : 'text-foreground'}`}
@@ -245,6 +253,7 @@ const ProfileCard: React.FC<Props> = (props) => {
                 isIconOnly
                 size="sm"
                 title={t('sider.cards.viewRuntimeConfig')}
+                isDisabled={info.type === 'managed'}
                 variant="light"
                 color="default"
                 onPress={() => {

@@ -177,6 +177,7 @@ import {
   attachSimpleSubscriptionGroups
 } from '../simple/service'
 import { setOperationMode } from '../simple/mode'
+import { tiziFeatureEnabled } from '../tizi/policy'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { fetchIPInfo } from './network-info'
@@ -456,6 +457,19 @@ const syncHandlers: Record<string, SyncFn> = {
 }
 
 export function registerIpcMainHandlers(): void {
+  if (tiziFeatureEnabled()) {
+    void import('../tizi').then(({ startTiziReporting }) => startTiziReporting())
+    ipcMain.handle('tiziAction', async (event, action: unknown, payload: unknown) => {
+      if (
+        !mainWindow ||
+        event.sender !== mainWindow.webContents ||
+        event.senderFrame !== event.sender.mainFrame
+      )
+        return { invokeError: 'Untrusted tizi request' }
+      const { tiziAction } = await import('../tizi')
+      return wrapAsync(tiziAction)(action, payload)
+    })
+  }
   registerHandlers(asyncHandlers, true)
   registerHandlers(syncHandlers, false)
 }

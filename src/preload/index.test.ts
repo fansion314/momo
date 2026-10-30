@@ -55,3 +55,23 @@ it('allows named media checks through the preload allowlist', async () => {
   await expect(checkMediaUnlockItem('Netflix')).resolves.toEqual(result)
   expect(invoke).toHaveBeenLastCalledWith('checkMediaUnlockItem', 'Netflix')
 })
+
+it('exposes the tizi bridge only in builds that explicitly enable it', async () => {
+  Object.defineProperty(process, 'contextIsolated', { configurable: true, value: true })
+  for (const enabled of [false, true]) {
+    vi.resetModules()
+    expose.mockClear()
+    invoke.mockClear()
+    vi.stubGlobal('__TIZI_ENABLED__', enabled)
+    await import('./index')
+    const api = expose.mock.calls.find(([name]) => name === 'electron')?.[1]
+    const request = api.ipcRenderer.invoke('tiziAction', 'status')
+    if (enabled) {
+      await request
+      expect(invoke).toHaveBeenCalledWith('tiziAction', 'status')
+    } else {
+      await expect(request).rejects.toThrow('Invalid invoke channel')
+      expect(invoke).not.toHaveBeenCalled()
+    }
+  }
+})

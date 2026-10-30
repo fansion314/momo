@@ -41,9 +41,9 @@ export const DEFAULT_SIDER_ORDER: SiderCardKey[] = [
 export const DEFAULT_NETWORK_INFO_CARD_ORDER: NetworkInfoCardKey[] = ['ip', 'topology', 'latency']
 
 export const DEFAULT_MIHOMO_PORTS = {
-  mixed: 7890,
-  socks: 7891,
-  http: 7892,
+  mixed: typeof __TIZI_TEST_BUILD__ !== 'undefined' && __TIZI_TEST_BUILD__ ? 17890 : 7890,
+  socks: typeof __TIZI_TEST_BUILD__ !== 'undefined' && __TIZI_TEST_BUILD__ ? 17891 : 7891,
+  http: typeof __TIZI_TEST_BUILD__ !== 'undefined' && __TIZI_TEST_BUILD__ ? 17892 : 7892,
   redir: 0,
   tproxy: 0
 } as const

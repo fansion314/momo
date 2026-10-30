@@ -1057,6 +1057,7 @@
   "settings.zoomFactor": "窗口缩放",
   "settings.zoomFactorHelp": "输入 50%–200% 或 0.50–2.00，步长 0.01。",
   "settings.systemPackageUpdates": "客户端和内核更新由 pacman 管理。",
+  "settings.systemPackageUpdates_macos": "客户端和内核更新由 Homebrew 管理。",
   "mihomo.systemCore": "系统 mihomomo / Smart",
   "mihomo.systemCoreDescription": "使用 /usr/bin/mihomomo，更新由 pacman 管理。",
   "traffic.history.trendTable": "查看趋势数据表",

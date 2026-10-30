@@ -179,7 +179,9 @@ const Proxies: React.FC = () => {
   const { mode = 'rule' } = controledMihomoConfig || {}
   const { groups: groupData, mutate, showHidden, setShowHidden } = useGroups()
   const { appConfig, patchAppConfig } = useAppConfig()
-  const simpleMode = appConfig?.operationMode === 'simple'
+  const simpleMode =
+    appConfig?.operationMode === 'simple' &&
+    !(typeof __TIZI_ENABLED__ !== 'undefined' && __TIZI_ENABLED__ && appConfig?.tiziActive)
   const [editMode, setEditMode] = useState(false)
   const editing = simpleMode && editMode
   const [editingGroup, setEditingGroup] = useState<string>()

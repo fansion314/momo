@@ -5,7 +5,7 @@ pkgdesc='Desktop client for mihomomo (prebuilt)'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'
 license=('GPL-3.0-only')
-depends=('electron' 'mihomomo>=1.19.33' 'gtk3' 'libnotify' 'libsecret' 'xdg-utils' 'wl-clipboard' 'polkit')
+depends=('electron' 'mihomomo>=1.19.33-2' 'gtk3' 'libnotify' 'libsecret' 'xdg-utils' 'wl-clipboard' 'polkit')
 provides=("clash-momo=${pkgver}")
 conflicts=('clash-momo')
 options=('!strip' '!debug')

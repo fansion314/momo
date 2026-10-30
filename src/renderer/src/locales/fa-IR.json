@@ -1034,6 +1034,7 @@
   "settings.zoomFactor": "Window zoom",
   "settings.zoomFactorHelp": "Enter 50%–200% or 0.50–2.00 (step 0.01).",
   "settings.systemPackageUpdates": "Client and core updates are managed by pacman.",
+  "settings.systemPackageUpdates_macos": "Client and core updates are managed by Homebrew.",
   "mihomo.systemCore": "System mihomomo / Smart",
   "mihomo.systemCoreDescription": "Uses /usr/bin/mihomomo; updates are managed by pacman.",
   "traffic.history.trendTable": "View trend as a table",

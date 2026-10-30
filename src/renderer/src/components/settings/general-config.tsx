@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { toast } from '@renderer/components/base/toast'
 import {
   Button,
@@ -61,7 +61,6 @@ const customTrayIconStateKeys: (keyof ICustomTrayIcons)[] = ['off', 'sysProxy', 
 
 const GeneralConfig: React.FC = () => {
   const { t, i18n } = useTranslation()
-  const zoomHelpId = useId()
   const { data: enable = false, mutate: mutateEnable } = useSWR('checkAutoRun', checkAutoRun)
   const { appConfig, patchAppConfig } = useAppConfig()
   const [customThemes, setCustomThemes] = useState<{ key: string; label: string }[]>()
@@ -718,17 +717,28 @@ const GeneralConfig: React.FC = () => {
           </>
         )}
 
-        <SettingItem title={t('settings.zoomFactor')} divider>
+        <SettingItem
+          title={t('settings.zoomFactor')}
+          actions={
+            <Tooltip content={t('settings.zoomFactorHelp')}>
+              <Button
+                isIconOnly
+                size="sm"
+                variant="light"
+                aria-label={t('settings.zoomFactorHelp')}
+              >
+                <IoIosHelpCircle className="text-lg" />
+              </Button>
+            </Tooltip>
+          }
+          divider
+        >
           <div className="flex items-center gap-3">
-            <span id={zoomHelpId} className="text-xs text-default-400 whitespace-nowrap">
-              {t('settings.zoomFactorHelp')}
-            </span>
             <Input
               key={zoomFactor}
               size="sm"
               className="w-48 shrink-0"
               aria-label={t('settings.zoomFactor')}
-              aria-describedby={zoomHelpId}
               defaultValue={`${Math.round(zoomFactor * 100)}%`}
               onBlur={async (event) => {
                 const value = parseZoomFactor(event.target.value)

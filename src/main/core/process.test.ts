@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { cleanupWindowsNamedPipes } from './process'
+import { cleanupWindowsNamedPipes, waitForCoreReady } from './process'
+import { getAxios } from './mihomoApi'
 
 const mocks = vi.hoisted(() => ({
   execFile: vi.fn()
@@ -20,6 +21,39 @@ vi.mock('../utils/logger', () => ({
 vi.mock('./mihomoApi', () => ({
   getAxios: vi.fn()
 }))
+
+describe('silent managed core readiness', () => {
+  it('waits for real managed outbounds rather than an early API greeting or default GLOBAL group', async () => {
+    vi.useFakeTimers()
+    let snapshots = 0
+    const get = vi.fn(async (endpoint: string) => {
+      if (endpoint !== '/proxies') return {}
+      snapshots++
+      return {
+        proxies:
+          snapshots === 1
+            ? {
+                DIRECT: { type: 'Direct' },
+                GLOBAL: { type: 'Selector' },
+                'PASS-RULE': { type: 'PassRule' }
+              }
+            : { managed: { type: 'VLESS' } }
+      }
+    })
+    vi.mocked(getAxios).mockResolvedValue({ get } as unknown as Awaited<
+      ReturnType<typeof getAxios>
+    >)
+    try {
+      const ready = waitForCoreReady(1000, true)
+      await vi.advanceTimersByTimeAsync(100)
+      await ready
+      expect(snapshots).toBe(2)
+      expect(get).toHaveBeenCalledWith('/configs')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
 
 const tasklistOutput = [
   '"MihomoTray.exe","1001","Console","1","10,000 K"',

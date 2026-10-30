@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
 import { is } from '@electron-toolkit/utils'
 import { app } from 'electron'
+import { tiziTestBuild } from '../../shared/test-build'
 
 export const homeDir = app.getPath('home')
 
@@ -15,7 +16,11 @@ export function isSystemInstall(): boolean {
 }
 
 export function configureAppPaths(): void {
-  const name = isSystemInstall() || app.isPackaged ? 'clash-momo' : 'clash-momo-dev'
+  const name = tiziTestBuild()
+    ? 'clash-momo-tizi-test'
+    : isSystemInstall() || app.isPackaged
+      ? 'clash-momo'
+      : 'clash-momo-dev'
   app.setName(name)
   app.setPath('userData', path.join(app.getPath('appData'), name))
 }
@@ -72,12 +77,13 @@ export function themesDir(): string {
 }
 
 export function mihomoCoreDir(): string {
+  if (tiziTestBuild() && process.platform === 'darwin' && app.isPackaged) return resourcesFilesDir()
   return process.platform === 'darwin' ? '/opt/homebrew/opt/mihomomo/bin' : '/usr/bin'
 }
 
 // A single system-owned core. Legacy arguments are accepted only for old callers.
 export function mihomoCorePath(_core?: string): string {
-  return path.join(mihomoCoreDir(), 'mihomomo')
+  return path.join(mihomoCoreDir(), tiziTestBuild() ? 'mihomomo-tizi' : 'mihomomo')
 }
 
 export function appConfigPath(): string {

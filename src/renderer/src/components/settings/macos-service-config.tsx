@@ -9,6 +9,7 @@ import {
   macServiceLogs
 } from '../../utils/ipc'
 import { toast } from '../base/toast'
+import { tiziTestBuild } from '../../../../shared/test-build'
 
 export default function MacosServiceConfig(): React.JSX.Element {
   const { i18n } = useTranslation()
@@ -32,6 +33,14 @@ export default function MacosServiceConfig(): React.JSX.Element {
       setBusy(false)
     }
   }
+  if (tiziTestBuild())
+    return (
+      <div role="status" className="py-3 border-b border-divider text-sm text-foreground-500">
+        {zh
+          ? '团购测试版使用随应用提供的独立内核与独立配置目录，不连接或更改已安装的 macOS 网络服务。'
+          : 'This test build uses its own bundled core and profile, and does not connect to or change the installed macOS network service.'}
+      </div>
+    )
   return (
     <div className="py-3 border-b border-divider space-y-3">
       <div className="font-medium">{zh ? 'macOS 网络服务' : 'macOS network service'}</div>

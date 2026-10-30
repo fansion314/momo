@@ -281,7 +281,11 @@ async function ensureNoHighPrivilegeCore(isAdmin: boolean): Promise<boolean> {
 app
   .whenReady()
   .then(async () => {
-    electronApp.setAppUserModelId('world.fansionia.clash-momo')
+    electronApp.setAppUserModelId(
+      typeof __TIZI_TEST_BUILD__ !== 'undefined' && __TIZI_TEST_BUILD__
+        ? 'world.fansionia.clash-momo.tizi-test'
+        : 'world.fansionia.clash-momo'
+    )
 
     const { appConfig, adminPromise } = await initPromise
     beginCoreInitialization()

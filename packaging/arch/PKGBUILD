@@ -7,7 +7,7 @@ pkgdesc='Desktop client for mihomomo'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'
 license=('GPL-3.0-only')
-depends=('electron' 'mihomomo>=1.19.33' 'gtk3' 'libnotify' 'libsecret' 'xdg-utils' 'wl-clipboard' 'polkit')
+depends=('electron' 'mihomomo>=1.19.33-2' 'gtk3' 'libnotify' 'libsecret' 'xdg-utils' 'wl-clipboard' 'polkit')
 makedepends=('git' 'nodejs' 'pnpm' 'unzip')
 source=("git+https://github.com/fansion314/momo.git#commit=@COMMIT@" 'clash-momo' 'clash-momo.desktop')
 sha256sums=('SKIP' '@LAUNCHER_SHA@' '@DESKTOP_SHA@')

@@ -27,6 +27,7 @@ import {
 import { uploadRuntimeConfigIfChanged } from '../resolve/gistApi'
 import { ensureRuntimeFiles } from '../utils/init'
 import { parseAgeSecretKeys } from '../utils/age'
+import { managedTiziActive } from '../tizi/policy'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
 import { createCoreLogWritableStream } from '../utils/logFile'
@@ -122,7 +123,7 @@ let resumeReloadTimer: NodeJS.Timeout | null = null
 // 文件监听器
 let coreWatcherInitialized = false
 
-type CoreStartupMode = 'log' | 'post-up'
+type CoreStartupMode = 'log' | 'post-up' | 'api'
 
 interface CoreStartupHook {
   hookDir: string
@@ -465,7 +466,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     coreStartupMode = 'log',
     testProfileOnStart = true
   } = appConfig
-  if (appConfig.operationMode === 'simple') diffWorkDir = false
+  if (appConfig.operationMode === 'simple' || managedTiziActive(appConfig)) diffWorkDir = false
 
   let { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
 
@@ -510,7 +511,11 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     await validateWindowsPipeAccess(ipcPath)
   }
 
-  const startupMode: CoreStartupMode = coreStartupMode === 'post-up' ? 'post-up' : 'log'
+  const startupMode: CoreStartupMode = managedTiziActive(appConfig)
+    ? 'api'
+    : coreStartupMode === 'post-up'
+      ? 'post-up'
+      : 'log'
   const startupHook =
     !isMacServiceActive() && !detached && startupMode === 'post-up'
       ? await createCoreStartupHook()
@@ -589,7 +594,7 @@ function setupCoreListeners(
   const { logLevel, startupMode } = config
   let startupSettled = false
   const startupTimer =
-    startupMode === 'log'
+    startupMode !== 'post-up'
       ? setTimeout(() => {
           rejectStartup(new Error(`Timed out waiting for core API readiness: ${coreHookTimeout}ms`))
         }, coreHookTimeout)
@@ -615,7 +620,10 @@ function setupCoreListeners(
   }
 
   const startMihomoApiStreams = async (): Promise<void> => {
-    await waitForCoreReady()
+    await waitForCoreReady(
+      startupMode === 'api' ? coreHookTimeout : undefined,
+      startupMode === 'api'
+    )
     await getAxios(true)
     await Promise.all([
       startMihomoTraffic(),
@@ -632,7 +640,7 @@ function setupCoreListeners(
       managerLogger.warn('Failed to sync runtime config to Gist', error)
     }
     try {
-      await patchMihomoConfig({ 'log-level': logLevel })
+      if (startupMode !== 'api') await patchMihomoConfig({ 'log-level': logLevel })
     } finally {
       mainWindow?.webContents.send('groupsUpdated')
       mainWindow?.webContents.send('rulesUpdated')
@@ -743,7 +751,7 @@ function setupCoreListeners(
       return
     }
 
-    if (startupMode === 'post-up') {
+    if (startupMode !== 'log') {
       return
     }
 
@@ -777,7 +785,11 @@ function setupCoreListeners(
     }
   })
 
-  if (startupMode === 'post-up') {
+  if (startupMode === 'api') {
+    void startMihomoApiStreams()
+      .then(() => resolveStartup([completeCoreStartup()]))
+      .catch(rejectStartup)
+  } else if (startupMode === 'post-up') {
     if (!hookWaiter) {
       rejectStartup(new Error('Core post-up startup mode requires a startup hook'))
       return

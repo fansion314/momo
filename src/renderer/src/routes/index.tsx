@@ -19,6 +19,7 @@ import {
   Simple,
   SimpleModule,
   Traffic,
+  Tizi,
   Tun
 } from './route-pages'
 
@@ -45,6 +46,7 @@ const ProfilesRoute: React.FC = () => {
 }
 
 const routes = [
+  ...(__TIZI_ENABLED__ && Tizi ? [{ path: '/tizi', element: <Tizi /> }] : []),
   {
     path: '/network',
     element: <NetworkPageComponent />

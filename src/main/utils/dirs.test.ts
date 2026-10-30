@@ -65,6 +65,25 @@ afterEach(() => {
 })
 
 describe('configureAppPaths', () => {
+  it('keeps the isolated tizi test app and bundled core separate from the installed client', async () => {
+    packaged = true
+    vi.stubGlobal('__TIZI_TEST_BUILD__', true)
+    vi.stubGlobal(
+      'process',
+      new Proxy(process, {
+        get: (target, key) =>
+          key === 'platform'
+            ? 'darwin'
+            : key === 'resourcesPath'
+              ? '/tmp/Tizi Test.app/Contents/Resources'
+              : Reflect.get(target, key)
+      })
+    )
+    const { configureAppPaths, mihomoCorePath } = await import('./dirs')
+    configureAppPaths()
+    expect(paths.userData).toBe(path.join(APP_DATA, 'clash-momo-tizi-test'))
+    expect(mihomoCorePath()).toBe('/tmp/Tizi Test.app/Contents/Resources/files/mihomomo-tizi')
+  })
   it('isolates an unpackaged local development app', async () => {
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()

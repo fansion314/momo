@@ -4,7 +4,7 @@ set -euo pipefail
 test "${GITHUB_ACTIONS:-}" = true
 test "$(uname -sm)" = 'Darwin arm64'
 tag=$(node -p 'require("./packaging/macos/release.json").coreTag')
-revision=1
+revision=2
 version=${tag#mihomomo-v}
 archive="mihomomo-${version}-macos-arm64-r${revision}.tar.gz"
 stage=$(mktemp -d)

@@ -10,7 +10,7 @@ import {
   CollisionDetection
 } from '@dnd-kit/core'
 import { SortableContext } from '@dnd-kit/sortable'
-import { NavigateFunction, useNavigate } from 'react-router-dom'
+import { NavigateFunction, useLocation, useNavigate } from 'react-router-dom'
 import SysproxySwitcher from '@renderer/components/sider/sysproxy-switcher'
 import TunSwitcher from '@renderer/components/sider/tun-switcher'
 import ProfileCard from '@renderer/components/sider/profile-card'
@@ -29,7 +29,10 @@ import UsageCard from '@renderer/components/sider/usage-card'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { mergeSiderOrder, SIDER_CARD_ROUTES } from '@renderer/utils/sider'
 import { markInitialContentPartReady } from '@renderer/utils/startup'
+import { Card, CardBody, CardFooter } from '@heroui/react'
+import { IoPeopleOutline } from 'react-icons/io5'
 import { DEFAULT_SIDER_ORDER } from '../../../../shared/appConfig'
+import SiderItem from './sider-item'
 
 const componentMap: Record<SiderCardKey, React.FC<{ iconOnly?: boolean; expanded?: boolean }>> = {
   sysproxy: SysproxySwitcher,
@@ -62,6 +65,7 @@ const SiderCards = (props: Props): React.JSX.Element => {
   const [order, setOrder] = useState<SiderCardKey[]>(mergeSiderOrder(siderOrder))
   const sensors = useSensors(useSensor(PointerSensor))
   const navigate: NavigateFunction = useNavigate()
+  const tiziActive = useLocation().pathname === '/tizi'
 
   useLayoutEffect(() => {
     markInitialContentPartReady('sider')
@@ -115,7 +119,17 @@ const SiderCards = (props: Props): React.JSX.Element => {
   if (iconOnly) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
-        <div className="min-h-full w-full flex flex-col gap-2">{cards}</div>
+        <div className="min-h-full w-full flex flex-col gap-2">
+          {cards}
+          {__TIZI_ENABLED__ && (
+            <SiderItem
+              title="新团购tizi订阅服务"
+              route="/tizi"
+              icon={<IoPeopleOutline className="text-xl" />}
+              expanded={expanded}
+            />
+          )}
+        </div>
       </div>
     )
   }
@@ -130,6 +144,23 @@ const SiderCards = (props: Props): React.JSX.Element => {
       >
         <div className="grid grid-cols-2 gap-2 m-2">
           <SortableContext items={order}>{cards}</SortableContext>
+          {__TIZI_ENABLED__ && (
+            <Card
+              isPressable
+              fullWidth
+              className={`col-span-2 min-w-0 ${tiziActive ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/30 text-foreground'}`}
+              onPress={() => navigate('/tizi')}
+            >
+              <CardBody className="pb-1">
+                <div className="flex h-[32px] items-center">
+                  <IoPeopleOutline className="text-[24px]" />
+                </div>
+              </CardBody>
+              <CardFooter className="pt-1">
+                <h3 className="truncate text-md font-bold">新团购tizi订阅服务</h3>
+              </CardFooter>
+            </Card>
+          )}
         </div>
       </DndContext>
     </div>

@@ -1,7 +1,7 @@
 import { Button, Tooltip } from '@heroui/react'
 import { createHeapSnapshot, quitApp, quitWithoutCore, resetAppConfig } from '@renderer/utils/ipc'
 import { useState } from 'react'
-import { version } from '@renderer/utils/init'
+import { platform, version } from '@renderer/utils/init'
 import { IoIosHelpCircle } from 'react-icons/io'
 import { getDriver } from '@renderer/App'
 import { useTranslation } from 'react-i18next'
@@ -33,8 +33,15 @@ const Actions: React.FC = () => {
             {t('actions.guide.button')}
           </Button>
         </SettingItem>
-        <SettingItem title={t('settings.systemPackageUpdates')} divider>
-          <code>pacman -Syu</code>
+        <SettingItem
+          title={t('settings.systemPackageUpdates', {
+            context: platform === 'darwin' ? 'macos' : undefined
+          })}
+          divider
+        >
+          <code className="min-w-0 text-right text-xs whitespace-normal break-words">
+            {platform === 'darwin' ? 'brew upgrade' : 'pacman -Syu'}
+          </code>
         </SettingItem>
         <SettingItem
           title={t('actions.reset.title')}

@@ -57,6 +57,7 @@ vi.mock('../config/app', () => ({ getAppConfig: async () => mocks.config }))
 vi.mock('../utils/logger', () => ({ createLogger: () => ({ info: vi.fn(), error: vi.fn() }) }))
 vi.mock('../utils/age', () => ({ decryptAgeContent: vi.fn() }))
 vi.mock('../simple/service', () => ({ compileSimpleRuntime: () => mocks.simpleCompile() }))
+vi.mock('../tizi', () => ({ tiziStateDirectory: async () => '/tmp/managed-tizi-state' }))
 vi.mock('../simple/subscriptions', () => ({ resolveSimpleDraft: async (draft: unknown) => draft }))
 vi.mock('./dnsOverrideGuard', () => ({
   evaluateDnsOverrideGuard: () => ({
@@ -82,6 +83,31 @@ const lastWrittenHistory = (): Record<string, unknown> => {
   const config = parse<Record<string, unknown>>(calls[calls.length - 1][1])
   return config['traffic-history'] as Record<string, unknown>
 }
+
+describe('managed tizi configuration producer', () => {
+  it('writes only a native managed reference and ignores the simple/private subscription compiler', async () => {
+    vi.stubGlobal('__TIZI_ENABLED__', true)
+    try {
+      const { generateProfile, getRuntimeConfigStr } = await import('./factory')
+      mocks.config.tiziActive = true
+      mocks.config.operationMode = 'simple'
+      mocks.config.diffWorkDir = true
+      mocks.simpleCompile.mockClear()
+      const result = await generateProfile()
+      expect(result.profileId).toBe('tizi-managed')
+      expect(mocks.simpleCompile).not.toHaveBeenCalled()
+      const config = parse<Record<string, unknown>>(await getRuntimeConfigStr())
+      expect(config['tizi-managed']).toEqual({ 'state-dir': '/tmp/managed-tizi-state' })
+      expect(config).not.toHaveProperty('proxies')
+      expect(config).not.toHaveProperty('proxy-providers')
+      expect(config).not.toHaveProperty('rules')
+      expect(config).not.toHaveProperty('external-controller')
+      expect(lastWrittenHistory()).toHaveProperty('enable', true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
 
 describe('native history config in actual profile producers', () => {
   it('uses one absolute database across standard profile work directories', async () => {

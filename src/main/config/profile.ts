@@ -28,7 +28,9 @@ import {
 import { createLogger } from '../utils/logger'
 import { atomicWriteFile } from '../utils/safeFile'
 import type { SimpleSubscriptionOptions } from '../../shared/simple-config'
-import { getAppConfig } from './app'
+import { TIZI_PROFILE_ID } from '../../shared/tizi'
+import { managedTiziActive, tiziFeatureEnabled } from '../tizi/policy'
+import { getAppConfig, patchAppConfig } from './app'
 import { getControledMihomoConfig } from './controledMihomo'
 import { getPluginItem, pluginSchedule } from './plugin'
 import { runtimeConfigWriteQueue } from './runtimeConfigQueue'
@@ -96,7 +98,7 @@ async function removeProfileWorkDir(id: string): Promise<void> {
 // 每次经写队列提交的写入 +1：一次迟到的冷加载 / 强制读取不得用旧内容覆盖比它新的缓存（R2-ISS-045 同型）
 let profileConfigVersion = 0
 
-export async function getProfileConfig(force = false): Promise<IProfileConfig> {
+async function getStoredProfileConfig(force = false): Promise<IProfileConfig> {
   if (force || !profileConfig) {
     const seen = profileConfigVersion
     const data = await readFile(profileConfigPath(), 'utf-8')
@@ -109,9 +111,32 @@ export async function getProfileConfig(force = false): Promise<IProfileConfig> {
   return JSON.parse(JSON.stringify(profileConfig))
 }
 
+export async function getProfileConfig(force = false): Promise<IProfileConfig> {
+  const result = await getStoredProfileConfig(force)
+  if (!tiziFeatureEnabled()) return result
+  const { getTiziProfileItem } = await import('../tizi')
+  const managed = await getTiziProfileItem()
+  if (managed)
+    result.items = [...result.items.filter((item) => item.id !== TIZI_PROFILE_ID), managed]
+  if (managedTiziActive(await getAppConfig())) result.current = TIZI_PROFILE_ID
+  return result
+}
+
+function assertEditableProfile(id: string | undefined, type?: IProfileItem['type']): void {
+  if (id === TIZI_PROFILE_ID || type === 'managed')
+    throw new Error(
+      '团购订阅为受保护配置，不能查看、编辑、导出或删除原始配置；请在团购页面管理登录与用量。'
+    )
+}
+
 export async function setProfileConfig(config: IProfileConfig): Promise<void> {
   await profileConfigWriteQueue.run(async () => {
     const nextConfig = JSON.parse(JSON.stringify(config)) as IProfileConfig
+    const stored = await getStoredProfileConfig()
+    nextConfig.items = nextConfig.items.filter(
+      (item) => item.id !== TIZI_PROFILE_ID && item.type !== 'managed'
+    )
+    if (nextConfig.current === TIZI_PROFILE_ID) nextConfig.current = stored.current
     await atomicWriteFile(profileConfigPath(), stringify(nextConfig), { encoding: 'utf8' })
     profileConfig = nextConfig
     profileConfigVersion++
@@ -132,6 +157,9 @@ export async function updateProfileConfig(
     }
     if (!Array.isArray(currentConfig.items)) currentConfig.items = []
     const nextConfig = await updater(JSON.parse(JSON.stringify(currentConfig)))
+    for (const item of nextConfig.items) assertEditableProfile(item.id, item.type)
+    if (nextConfig.current === TIZI_PROFILE_ID)
+      throw new Error('Managed selection must use the protected subscription action')
     await atomicWriteFile(profileConfigPath(), stringify(nextConfig), { encoding: 'utf8' })
     profileConfig = nextConfig
     profileConfigVersion++
@@ -152,17 +180,25 @@ export async function changeCurrentProfile(id: string): Promise<void> {
   changeProfileQueue = changeProfileQueue
     .catch(() => {})
     .then(async () => {
-      const { current } = await getProfileConfig()
-      if (current === id) return
+      if (id === TIZI_PROFILE_ID) {
+        const { tiziAction } = await import('../tizi')
+        await tiziAction('activate')
+        return
+      }
+      const { current } = await getStoredProfileConfig()
+      const previousAppConfig = await getAppConfig()
+      const wasTizi = managedTiziActive(previousAppConfig)
+      if (current === id && !wasTizi) return
 
       try {
+        if (wasTizi) await patchAppConfig({ tiziActive: false })
         await updateProfileConfig((config) => {
           config.current = id
           return config
         })
         const { useHotReloadProfile = false, hotReloadProfileAutoCloseConnection = false } =
           await getAppConfig()
-        if (useHotReloadProfile) {
+        if (useHotReloadProfile && !wasTizi) {
           await mihomoHotReloadConfig()
           if (hotReloadProfileAutoCloseConnection) {
             try {
@@ -174,12 +210,17 @@ export async function changeCurrentProfile(id: string): Promise<void> {
         } else {
           await restartCore()
         }
+        if (wasTizi) {
+          const { initWebdavBackupScheduler } = await import('../resolve/backup')
+          await initWebdavBackupScheduler()
+        }
       } catch (e) {
         // 回滚配置
         await updateProfileConfig((config) => {
           config.current = current
           return config
         })
+        if (wasTizi) await patchAppConfig({ tiziActive: true })
         taskError = e
       }
     })
@@ -205,6 +246,7 @@ export async function updateProfileItem(
   item: IProfileItem,
   simpleOptions?: SimpleSubscriptionOptions
 ): Promise<void> {
+  assertEditableProfile(item.id, item.type)
   const customHome = normalizeCustomHome(item.customHome)
   const previous = simpleOptions ? await getProfileItem(item.id) : undefined
   await updateProfileConfig((config) => {
@@ -282,6 +324,7 @@ export async function addProfileItem(
 }
 
 export async function removeProfileItem(id: string): Promise<void> {
+  assertEditableProfile(id)
   const item = await getProfileItem(id)
   if (item?.type === 'plugin' && item.pluginId) {
     // 级联删除插件：tombstone → plugin lock → revoke → profile → item → vault 在同一个临界区内完成。
@@ -541,6 +584,7 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
 }
 
 export async function createProfile(item: Partial<IProfileItem>): Promise<IProfileItem> {
+  assertEditableProfile(item.id, item.type)
   const id = item.id || new Date().getTime().toString(16)
   const newItem: IProfileItem = {
     id,
@@ -855,6 +899,7 @@ export async function validateProfileCandidate(
 }
 
 export async function getProfileStr(id: string | undefined): Promise<string> {
+  assertEditableProfile(id)
   if (existsSync(profilePath(id || 'default'))) {
     return await readFile(profilePath(id || 'default'), 'utf-8')
   } else {
@@ -863,6 +908,7 @@ export async function getProfileStr(id: string | undefined): Promise<string> {
 }
 
 export async function setProfileStr(id: string, content: string): Promise<void> {
+  assertEditableProfile(id)
   // 读取最新的配置
   const { current } = await getProfileConfig(true)
   if ((await getAppConfig()).operationMode === 'simple') {

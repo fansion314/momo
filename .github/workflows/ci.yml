@@ -67,14 +67,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: fansion314/packages
-          ref: 708c7a597893e9a1361bdbb87674d840da928b5a
+          ref: e5281d1957a6f1bfdfd9c724d3498def8cc64e6c
           path: .distribution
           persist-credentials: false
       - name: Start the actual app with its Homebrew core
         run: |
-          brew tap fansion314/packages https://github.com/fansion314/packages.git
-          brew trust fansion314/packages
-          brew install --formula fansion314/packages/mihomomo
+          brew tap fansionia/tap https://github.com/fansion314/packages.git
+          brew trust fansionia/tap
+          brew install --formula fansionia/tap/mihomomo
           bash .distribution/homebrew/scripts/test-clash-momo.sh "$PWD/dist/macos/Clash Momo.app"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

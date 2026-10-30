@@ -17,6 +17,11 @@ const ResourcesPage = createPreloadablePage(() => import('@renderer/pages/resour
 const DNSPage = createPreloadablePage(() => import('@renderer/pages/dns'))
 const SnifferPage = createPreloadablePage(() => import('@renderer/pages/sniffer'))
 const SubStorePage = createPreloadablePage(() => import('@renderer/pages/substore'))
+const TiziPage = __TIZI_ENABLED__
+  ? createPreloadablePage(() => import('@renderer/pages/tizi'))
+  : undefined
+export const Tizi = TiziPage?.Page
+
 const TrafficPage = createPreloadablePage(() => import('@renderer/pages/traffic'))
 // Both modes share the subscription manager and profile library.
 const SimplePage = ProfilesPage

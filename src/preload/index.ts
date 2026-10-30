@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
+const tiziEnabled = typeof __TIZI_ENABLED__ !== 'undefined' && __TIZI_ENABLED__
 // 允许的 invoke channels 白名单
 const validInvokeChannels = [
+  ...(tiziEnabled ? (['tiziAction'] as const) : []),
   // macOS service
   'macServiceStatus',
   'macServiceLogs',
@@ -243,7 +245,7 @@ const listenerMap = new Map<ListenChannel, Set<IpcListener>>()
 const electronAPI = {
   ipcRenderer: {
     invoke: (channel: InvokeChannel, ...args: unknown[]): Promise<unknown> => {
-      if (validInvokeChannels.includes(channel)) {
+      if ((validInvokeChannels as readonly string[]).includes(channel)) {
         return ipcRenderer.invoke(channel, ...args)
       }
       return Promise.reject(new Error(`Invalid invoke channel: ${channel}`))

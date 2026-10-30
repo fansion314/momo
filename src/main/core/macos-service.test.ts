@@ -32,6 +32,16 @@ afterEach(() => {
 })
 
 describe('macOS service session', () => {
+  it('never connects to or modifies the installed privileged service in an isolated test build', async () => {
+    vi.stubGlobal('__TIZI_TEST_BUILD__', true)
+    const service = await import('./macos-service')
+    expect(await service.connectMacService()).toBe(false)
+    expect(await service.macServiceStatus()).toEqual({ installed: false, compatible: false })
+    await expect(service.installMacService()).rejects.toThrow('测试版')
+    await expect(service.uninstallMacService()).rejects.toThrow('测试版')
+    expect(mocks.request).not.toHaveBeenCalled()
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
   it('keeps its token in main and renews the lease independently of renderer lifetime', async () => {
     const { createHash } = await import('crypto')
     const hash = createHash('sha256').update('binary').digest('hex')
