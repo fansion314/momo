@@ -42,6 +42,7 @@ run(
   'go',
   [
     'build',
+    '-buildvcs=false',
     '-trimpath',
     '-ldflags=-s -w',
     '-o',
