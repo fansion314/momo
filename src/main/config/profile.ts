@@ -222,6 +222,14 @@ export async function changeCurrentProfile(id: string): Promise<void> {
         })
         if (wasTizi) await patchAppConfig({ tiziActive: true })
         taskError = e
+      } finally {
+        if (wasTizi) {
+          const { invalidateTiziProfileItem } = await import('../tizi')
+          invalidateTiziProfileItem()
+        }
+        const { mainWindow } = await import('../window')
+        mainWindow?.webContents.send('appConfigUpdated')
+        mainWindow?.webContents.send('profileConfigUpdated')
       }
     })
   await changeProfileQueue

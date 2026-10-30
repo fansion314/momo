@@ -107,9 +107,23 @@ async function status(): Promise<TiziStatus> {
   return { ...data, active: (await getAppConfig()).tiziActive === true }
 }
 
+export async function assertManagedTiziCapability(current?: TiziStatus): Promise<void> {
+  const capabilities = current ?? (await status())
+  if (!capabilities.supported || !capabilities.keyReady)
+    throw new Error('请安装启用团购功能并注入构建密钥的配套 mihomomo 内核。')
+  if ((capabilities.managed_config_version ?? 0) < 2)
+    throw new Error(
+      '请升级 mihomomo 至 1.19.33-3 或更新版本；macOS 升级内核后还需在设置中更新网络服务。'
+    )
+}
+
 let profileSnapshot: IProfileItem | undefined
 let profileExpires = 0
 let profilePending: Promise<IProfileItem | undefined> | undefined
+
+export function invalidateTiziProfileItem(): void {
+  profileExpires = 0
+}
 
 /** Metadata only: never read or copy the sealed subscription into the profile library. */
 export async function getTiziProfileItem(): Promise<IProfileItem | undefined> {
@@ -156,8 +170,7 @@ async function select(active: boolean): Promise<TiziStatus> {
   const previous = (await getAppConfig()).tiziActive === true
   if (active) {
     const current = await status()
-    if (!current.supported || !current.keyReady)
-      throw new Error('请安装启用团购功能并注入构建密钥的 Mihomomo 内核。')
+    await assertManagedTiziCapability(current)
     if (!current.logged_in) throw new Error('请先登录并获取团购订阅。')
   }
   if (previous === active) return status()
@@ -170,6 +183,7 @@ async function select(active: boolean): Promise<TiziStatus> {
     await restartCore().catch(() => {})
     throw error
   } finally {
+    invalidateTiziProfileItem()
     const { initWebdavBackupScheduler } = await import('../resolve/backup')
     await initWebdavBackupScheduler()
     notify()

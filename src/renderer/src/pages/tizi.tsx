@@ -59,9 +59,16 @@ export default function TiziPage(): React.JSX.Element {
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
-    return window.electron.ipcRenderer.on('appConfigUpdated', () => {
-      void mutateStatus()
-    })
+    const refresh = (): void => {
+      void mutateStatus().catch(() => undefined)
+    }
+    // Revalidate on return even inside SWR's deduplication window: another page
+    // may have selected a different profile while this page was unmounted.
+    refresh()
+    const unsubscribe = ['appConfigUpdated', 'profileConfigUpdated', 'core-started'].map((event) =>
+      window.electron.ipcRenderer.on(event, refresh)
+    )
+    return () => unsubscribe.forEach((dispose) => dispose())
   }, [mutateStatus])
 
   async function run(action: TiziAction, payload: Record<string, unknown> = {}): Promise<void> {
@@ -102,7 +109,12 @@ export default function TiziPage(): React.JSX.Element {
       await mutateStatus()
       void mutateUsage().catch(() => undefined)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const message = err instanceof Error ? err.message : String(err)
+      setError(
+        message.includes('Tizi service is unreachable')
+          ? '无法连接团购服务，请检查网络和 DNS 设置后重试。已有缓存订阅会继续保留。'
+          : message
+      )
     } finally {
       setBusyAction(null)
     }
@@ -110,6 +122,13 @@ export default function TiziPage(): React.JSX.Element {
 
   const credentials = { server_url: serverUrl, email: email.trim(), password }
   const subscription = status?.subscription
+  const usageFailureMessage =
+    usageError instanceof Error ? usageError.message : String(usageError ?? '')
+  const usageFailureReason = /unauthorized|revoked|\b401\b/.test(usageFailureMessage)
+    ? '设备认证未通过，请重新登录。'
+    : /unreachable|ENOTFOUND|EAI_AGAIN|timeout|DNS/i.test(usageFailureMessage)
+      ? '暂时无法连接用量服务，请检查网络和 DNS 设置后重试。'
+      : '本次用量请求未成功，请稍后重试。'
   const days = usage?.days ?? []
   const settlementDay = new Date(Date.now() + 3600000).toISOString().slice(0, 10)
   const healthNames: Record<string, string> = {
@@ -152,6 +171,12 @@ export default function TiziPage(): React.JSX.Element {
         {status && (!status.supported || !status.keyReady) && (
           <p className="rounded-lg bg-warning/10 p-3 text-sm">
             请安装启用团购功能并配置构建密钥的配套 Mihomomo 内核。
+          </p>
+        )}
+        {status?.supported && status.keyReady && (status.managed_config_version ?? 0) < 2 && (
+          <p className="rounded-lg bg-warning/10 p-3 text-sm">
+            当前内核尚不支持完整的团购 DNS 和 Smart 设置。请升级 mihomomo 至 1.19.33-3
+            或更新版本；macOS 还需在内核设置中更新网络服务。
           </p>
         )}
         {!status ? (
@@ -356,7 +381,7 @@ export default function TiziPage(): React.JSX.Element {
                 </div>
               </div>
               <p className="text-sm text-default-500">
-                待报日期：{status.pending_days ?? '—'}；记录状态：
+                待报日期：{status.pending_days ?? '—'}；本地记录状态：
                 {healthNames[status.health || 'unknown'] || '记录不完整'}
                 。离线时继续使用缓存订阅，联网后自动补报。
               </p>
@@ -409,7 +434,14 @@ export default function TiziPage(): React.JSX.Element {
                 role="alert"
                 className="flex items-center justify-between gap-3 rounded-lg bg-warning/10 p-3 text-sm"
               >
-                <span>用量暂时无法更新{usage ? '，保留上次数据' : ''}。</span>
+                <div>
+                  <p>
+                    {usage
+                      ? '用量更新失败，当前显示上次成功获取的数据。'
+                      : '尚未取得服务端用量数据。'}
+                  </p>
+                  <p className="mt-1 text-xs text-default-500">{usageFailureReason}</p>
+                </div>
                 <Button size="sm" onPress={() => void mutateUsage()}>
                   重试用量加载
                 </Button>

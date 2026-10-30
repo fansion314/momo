@@ -25,6 +25,7 @@ export interface TiziSubscription {
 export interface TiziStatus {
   supported: boolean
   keyReady: boolean
+  managed_config_version?: number
   active: boolean
   logged_in: boolean
   email?: string

@@ -27,7 +27,7 @@ import { decryptAgeContent } from '../utils/age'
 import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConfig'
 import { atomicWriteFile } from '../utils/safeFile'
 import { compileSimpleRuntime } from '../simple/service'
-import { managedTiziActive, managedTiziOverlay } from '../tizi/policy'
+import { managedSmartPolicy, managedTiziActive, managedTiziOverlay } from '../tizi/policy'
 import { applyHistoryConfig } from './history-config'
 import { evaluateDnsOverrideGuard, type DnsOverrideGuardResult } from './dnsOverrideGuard'
 
@@ -140,16 +140,30 @@ export async function generateProfile(
 ): Promise<GenerateProfileResult> {
   const selectedAppConfig = await getAppConfig()
   if (managedTiziActive(selectedAppConfig) && options.profileId === undefined) {
-    const { tiziStateDirectory } = await import('../tizi')
+    const { tiziStateDirectory, assertManagedTiziCapability } = await import('../tizi')
+    await assertManagedTiziCapability()
+    // Source nodes/DNS remain sealed in the kernel. This still consumes an explicit
+    // DNS toggle request, so the setting is committed only after successful apply.
+    const dnsGuard = evaluateDnsOverrideGuard(
+      'tizi-managed',
+      {},
+      selectedAppConfig.controlDns ?? DEFAULT_CONTROL_DNS,
+      options.updateRuntimeConfig !== false,
+      !selectedAppConfig.disableDnsOverrideGuard
+    )
     const overlay = managedTiziOverlay(
-      pendingControledMihomoConfig ?? (await getControledMihomoConfig())
+      pendingControledMihomoConfig ?? (await getControledMihomoConfig()),
+      { ...selectedAppConfig, controlDns: dnsGuard.controlDns }
     )
     const managed = {
       ...overlay,
       'log-level': ['info', 'debug'].includes(String(overlay['log-level']))
         ? overlay['log-level']
         : 'info',
-      'tizi-managed': { 'state-dir': await tiziStateDirectory() }
+      'tizi-managed': {
+        'state-dir': await tiziStateDirectory(),
+        smart: managedSmartPolicy(selectedAppConfig)
+      }
     }
     applyHistoryConfig(managed, selectedAppConfig)
     const content = stringify(managed)
@@ -160,7 +174,7 @@ export async function generateProfile(
     }
     return {
       profileId: 'tizi-managed',
-      dnsGuard: { controlDns: false, autoDisabled: false, fingerprint: null, request: null }
+      dnsGuard
     }
   }
   if (selectedAppConfig.operationMode === 'simple') {

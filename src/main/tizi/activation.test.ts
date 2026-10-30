@@ -52,9 +52,13 @@ beforeEach(() => {
   mocks.config.tiziActive = false
   mocks.restart.mockReset().mockResolvedValue(undefined)
   mocks.patch.mockReset()
-  mocks.native
-    .mockReset()
-    .mockResolvedValue({ supported: true, keyReady: true, logged_in: true, device_id: 'device' })
+  mocks.native.mockReset().mockResolvedValue({
+    supported: true,
+    keyReady: true,
+    managed_config_version: 2,
+    logged_in: true,
+    device_id: 'device'
+  })
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -62,6 +66,14 @@ afterEach(() => {
 })
 
 describe('managed activation concurrency and rollback', () => {
+  it('rejects old managed kernels without changing the selected configuration', async () => {
+    mocks.native.mockResolvedValue({ supported: true, keyReady: true, logged_in: true })
+    const { tiziAction } = await import('./index')
+    await expect(tiziAction('activate')).rejects.toThrow('1.19.33-3')
+    expect(mocks.config.tiziActive).toBe(false)
+    expect(mocks.restart).not.toHaveBeenCalled()
+    expect(mocks.patch).not.toHaveBeenCalled()
+  })
   it('keeps local status and activation responsive while remote usage is stalled', async () => {
     let finishUsage!: (value: unknown) => void
     mocks.native.mockImplementation(async (_core, _directory, action) =>
@@ -69,7 +81,13 @@ describe('managed activation concurrency and rollback', () => {
         ? new Promise((resolve) => {
             finishUsage = resolve
           })
-        : { supported: true, keyReady: true, logged_in: true, device_id: 'device' }
+        : {
+            supported: true,
+            keyReady: true,
+            managed_config_version: 2,
+            logged_in: true,
+            device_id: 'device'
+          }
     )
     const { tiziAction } = await import('./index')
     const usage = tiziAction('usage')
@@ -98,7 +116,13 @@ describe('managed activation concurrency and rollback', () => {
         ? new Promise((resolve) => {
             finishSync = resolve
           })
-        : { supported: true, keyReady: true, logged_in: true, device_id: 'device' }
+        : {
+            supported: true,
+            keyReady: true,
+            managed_config_version: 2,
+            logged_in: true,
+            device_id: 'device'
+          }
     )
     const { startTiziReporting, tiziAction } = await import('./index')
     startTiziReporting()

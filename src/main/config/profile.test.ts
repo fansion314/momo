@@ -46,7 +46,8 @@ const mocks = vi.hoisted(() => ({
   yamlMaxAliasCount: 100,
   tiziActive: false,
   tiziAction: vi.fn(),
-  tiziProfile: vi.fn()
+  tiziProfile: vi.fn(),
+  send: vi.fn()
 }))
 
 vi.mock('electron', () => ({ app: { getVersion: () => '2.0.0' } }))
@@ -134,8 +135,13 @@ vi.mock('./app', () => ({
     if (patch.tiziActive !== undefined) mocks.tiziActive = patch.tiziActive
   }
 }))
-vi.mock('../tizi', () => ({ tiziAction: mocks.tiziAction, getTiziProfileItem: mocks.tiziProfile }))
+vi.mock('../tizi', () => ({
+  tiziAction: mocks.tiziAction,
+  getTiziProfileItem: mocks.tiziProfile,
+  invalidateTiziProfileItem: vi.fn()
+}))
 vi.mock('../resolve/backup', () => ({ initWebdavBackupScheduler: vi.fn() }))
+vi.mock('../window', () => ({ mainWindow: { webContents: { send: mocks.send } } }))
 vi.mock('./controledMihomo', () => ({
   getControledMihomoConfig: () => Promise.resolve({ 'mixed-port': 7890 })
 }))
@@ -234,6 +240,8 @@ describe('protected managed subscription profile', () => {
     await changeCurrentProfile('remote')
     expect(mocks.tiziActive).toBe(false)
     expect((await getProfileConfig()).current).toBe('remote')
+    expect(mocks.send).toHaveBeenCalledWith('appConfigUpdated')
+    expect(mocks.send).toHaveBeenCalledWith('profileConfigUpdated')
   })
 
   it('rejects raw reads, modifications and deletion even when called without renderer controls', async () => {

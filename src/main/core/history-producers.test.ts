@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
     trafficHistoryRetentionDays: 30
   } as IAppConfig,
   write: vi.fn(),
-  simpleCompile: vi.fn()
+  simpleCompile: vi.fn(),
+  controlled: {} as Partial<IMihomoConfig>,
+  capability: vi.fn()
 }))
 const workDir = path.join('/tmp', 'clash-momo-history-tests', 'work')
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
@@ -48,7 +50,7 @@ vi.mock('../config', () => ({
     rules: [],
     'traffic-history': { enable: false, path: './subscription-controlled.db', 'retention-days': 1 }
   }),
-  getControledMihomoConfig: async () => ({}),
+  getControledMihomoConfig: async () => mocks.controlled,
   getOverrideConfig: async () => ({ items: [] }),
   getOverride: vi.fn(),
   getOverrideItem: vi.fn()
@@ -57,11 +59,14 @@ vi.mock('../config/app', () => ({ getAppConfig: async () => mocks.config }))
 vi.mock('../utils/logger', () => ({ createLogger: () => ({ info: vi.fn(), error: vi.fn() }) }))
 vi.mock('../utils/age', () => ({ decryptAgeContent: vi.fn() }))
 vi.mock('../simple/service', () => ({ compileSimpleRuntime: () => mocks.simpleCompile() }))
-vi.mock('../tizi', () => ({ tiziStateDirectory: async () => '/tmp/managed-tizi-state' }))
+vi.mock('../tizi', () => ({
+  tiziStateDirectory: async () => '/tmp/managed-tizi-state',
+  assertManagedTiziCapability: mocks.capability
+}))
 vi.mock('../simple/subscriptions', () => ({ resolveSimpleDraft: async (draft: unknown) => draft }))
 vi.mock('./dnsOverrideGuard', () => ({
-  evaluateDnsOverrideGuard: () => ({
-    controlDns: false,
+  evaluateDnsOverrideGuard: (_id: string, _profile: unknown, controlDns: boolean) => ({
+    controlDns,
     autoDisabled: false,
     fingerprint: null,
     request: null
@@ -70,6 +75,8 @@ vi.mock('./dnsOverrideGuard', () => ({
 
 beforeEach(() => {
   mocks.write.mockReset().mockResolvedValue(undefined)
+  mocks.controlled = {}
+  mocks.capability.mockReset().mockResolvedValue(undefined)
   mocks.config = {
     core: 'mihomomo',
     operationMode: 'standard',
@@ -85,6 +92,18 @@ const lastWrittenHistory = (): Record<string, unknown> => {
 }
 
 describe('managed tizi configuration producer', () => {
+  it('refuses an old kernel on startup before overwriting the valid configuration', async () => {
+    vi.stubGlobal('__TIZI_ENABLED__', true)
+    try {
+      mocks.config.tiziActive = true
+      mocks.capability.mockRejectedValueOnce(new Error('Upgrade mihomomo 1.19.33-3'))
+      const { generateProfile } = await import('./factory')
+      await expect(generateProfile()).rejects.toThrow('Upgrade')
+      expect(mocks.write).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
   it('writes only a native managed reference and ignores the simple/private subscription compiler', async () => {
     vi.stubGlobal('__TIZI_ENABLED__', true)
     try {
@@ -97,12 +116,94 @@ describe('managed tizi configuration producer', () => {
       expect(result.profileId).toBe('tizi-managed')
       expect(mocks.simpleCompile).not.toHaveBeenCalled()
       const config = parse<Record<string, unknown>>(await getRuntimeConfigStr())
-      expect(config['tizi-managed']).toEqual({ 'state-dir': '/tmp/managed-tizi-state' })
+      expect(config['tizi-managed']).toEqual({
+        'state-dir': '/tmp/managed-tizi-state',
+        smart: { enabled: true, useLightGBM: false, collectData: false, collectorSize: 100 }
+      })
       expect(config).not.toHaveProperty('proxies')
       expect(config).not.toHaveProperty('proxy-providers')
       expect(config).not.toHaveProperty('rules')
       expect(config).not.toHaveProperty('external-controller')
       expect(lastWrittenHistory()).toHaveProperty('enable', true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+  it('keeps a working controlled DNS/sniffer with TUN and passes only typed Smart policy to the kernel', async () => {
+    vi.stubGlobal('__TIZI_ENABLED__', true)
+    try {
+      mocks.config = {
+        ...mocks.config,
+        tiziActive: true,
+        controlDns: true,
+        controlSniff: true,
+        useNameserverPolicy: false,
+        enableSmartOverride: true,
+        smartCoreUseLightGBM: true,
+        smartCoreCollectData: true,
+        smartCollectorSize: 512
+      }
+      mocks.controlled = {
+        tun: { enable: true, 'dns-hijack': ['any:53'] },
+        dns: {
+          enable: true,
+          'enhanced-mode': 'fake-ip',
+          nameserver: ['https://dns.example/query'],
+          'nameserver-policy': { '+.private.example': 'https://other.example/query' }
+        },
+        hosts: { 'test.example': ['127.0.0.1'] },
+        sniffer: { enable: true },
+        'external-controller': '0.0.0.0:9090',
+        secret: 'configured-local-api-auth',
+        proxies: [{ name: 'must-not-export', password: 'must-not-export' }]
+      } as unknown as Partial<IMihomoConfig>
+      const { generateProfile, getRuntimeConfigStr } = await import('./factory')
+      const result = await generateProfile()
+      const config = parse<Record<string, unknown>>(await getRuntimeConfigStr())
+      expect(config.dns).toEqual({
+        enable: true,
+        'enhanced-mode': 'fake-ip',
+        nameserver: ['https://dns.example/query']
+      })
+      expect(config.hosts).toEqual({ 'test.example': ['127.0.0.1'] })
+      expect(config.sniffer).toEqual({ enable: true })
+      expect(config.tun).toMatchObject({ enable: true, 'dns-hijack': ['any:53'] })
+      expect(config['tizi-managed']).toEqual({
+        'state-dir': '/tmp/managed-tizi-state',
+        smart: { enabled: true, useLightGBM: true, collectData: true, collectorSize: 512 }
+      })
+      expect(result.dnsGuard.controlDns).toBe(true)
+      expect(mocks.controlled.dns).toHaveProperty('nameserver-policy')
+      expect(config).not.toHaveProperty('proxies')
+      expect(config).not.toHaveProperty('external-controller')
+      expect(config.secret).toBe('configured-local-api-auth')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('does not add controlled DNS/hosts/sniffer when their override flags are disabled', async () => {
+    vi.stubGlobal('__TIZI_ENABLED__', true)
+    try {
+      mocks.config = {
+        ...mocks.config,
+        tiziActive: true,
+        controlDns: false,
+        controlSniff: false,
+        enableSmartOverride: false
+      }
+      mocks.controlled = {
+        dns: { enable: true },
+        hosts: { example: ['127.0.0.1'] },
+        sniffer: { enable: true }
+      } as unknown as Partial<IMihomoConfig>
+      const { generateProfile, getRuntimeConfigStr } = await import('./factory')
+      await generateProfile()
+      const config = parse<Record<string, unknown>>(await getRuntimeConfigStr())
+      expect(config).not.toHaveProperty('dns')
+      expect(config).not.toHaveProperty('hosts')
+      expect(config).not.toHaveProperty('sniffer')
+      expect(config['tizi-managed']).toMatchObject({ smart: { enabled: false } })
     } finally {
       vi.unstubAllGlobals()
     }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defaultControledMihomoConfig } from '../utils/template'
 import { assertConfigurationBackupAllowed, managedTiziActive, managedTiziOverlay } from './policy'
 
 const mocks = vi.hoisted(() => ({ config: { tiziActive: true } }))
@@ -22,6 +23,7 @@ describe('managed subscription protections', () => {
     const overlay = managedTiziOverlay({
       'mixed-port': 7890,
       'external-controller-unix': '/private/core.sock',
+      secret: 'user-local-controller-auth',
       'external-controller': '0.0.0.0:9090',
       'external-controller-tls': '0.0.0.0:9091',
       'external-ui': 'ui',
@@ -36,7 +38,26 @@ describe('managed subscription protections', () => {
     })
     expect(overlay).toEqual({
       'mixed-port': 7890,
-      'external-controller-unix': '/private/core.sock'
+      'external-controller-unix': '/private/core.sock',
+      secret: 'user-local-controller-auth'
     })
+  })
+  it('retains every existing safe controlled default, including model/geo/profile settings', () => {
+    const controlled = { ...defaultControledMihomoConfig, 'interface-name': 'en0' }
+    const overlay = managedTiziOverlay(controlled, {
+      controlDns: true,
+      controlSniff: true,
+      useNameserverPolicy: true
+    })
+    const blocked = new Set([
+      'external-controller',
+      'external-ui',
+      'external-ui-url',
+      'external-controller-cors'
+    ])
+    for (const [key, value] of Object.entries(controlled)) {
+      if (blocked.has(key)) expect(overlay).not.toHaveProperty(key)
+      else expect(overlay[key]).toEqual(value)
+    }
   })
 })

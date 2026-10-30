@@ -449,7 +449,7 @@ function buildCoreEnv(safePath?: string, ageSecretKey?: string): NodeJS.ProcessE
 }
 
 // 准备核心配置
-async function prepareCore(detached: boolean, skipStop = false): Promise<CoreConfig> {
+export async function prepareCore(detached: boolean, skipStop = false): Promise<CoreConfig> {
   await ensureRuntimeFiles()
   if (process.platform === 'darwin') {
     await validateMacCore()
@@ -484,7 +484,12 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     tun = simpleRuntime.tun
   }
   const ageSecretKey = (await getProfileItem(current))?.ageSecretKey || ''
-  if (testProfileOnStart) {
+  // The ordinary user cannot read the helper-owned encrypted account state.
+  // applySnapshot always validates the actual snapshot with root --momo-managed -t
+  // before start/reload; this preference must never bypass that mandatory check.
+  const helperValidatesManagedProfile =
+    process.platform === 'darwin' && isMacServiceActive() && managedTiziActive(appConfig)
+  if (testProfileOnStart && !helperValidatesManagedProfile) {
     await checkProfile(current, core, diffWorkDir, ageSecretKey)
   }
   if (!skipStop && hasCoreProcess()) {

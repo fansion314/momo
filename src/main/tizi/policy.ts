@@ -1,4 +1,5 @@
 import { getAppConfig } from '../config/app'
+import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConfig'
 
 export function tiziFeatureEnabled(): boolean {
   return typeof __TIZI_ENABLED__ !== 'undefined' && __TIZI_ENABLED__
@@ -23,6 +24,7 @@ export const managedOverlayKeys = [
   'allow-lan',
   'bind-address',
   'authentication',
+  'secret',
   'lan-allowed-ips',
   'lan-disallowed-ips',
   'skip-auth-prefixes',
@@ -32,15 +34,55 @@ export const managedOverlayKeys = [
   'find-process-mode',
   'tcp-concurrent',
   'unified-delay',
+  'interface-name',
+  'profile',
+  'geodata-mode',
+  'geo-auto-update',
+  'geo-update-interval',
+  'geox-url',
+  'lgbm-auto-update',
+  'lgbm-update-interval',
+  'lgbm-url',
   'tun',
+  'dns',
+  'hosts',
+  'sniffer',
   'external-controller-unix',
   'external-controller-pipe'
 ] as const
 
-export function managedTiziOverlay(config: object): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(config).filter(([key]) =>
-      (managedOverlayKeys as readonly string[]).includes(key)
+export function managedTiziOverlay(
+  config: object,
+  settings: Partial<IAppConfig> = {}
+): Record<string, unknown> {
+  const overlay = structuredClone(
+    Object.fromEntries(
+      Object.entries(config).filter(([key]) =>
+        (managedOverlayKeys as readonly string[]).includes(key)
+      )
     )
   )
+  if (!(settings.controlDns ?? DEFAULT_CONTROL_DNS)) {
+    delete overlay.dns
+    delete overlay.hosts
+  }
+  if (!(settings.controlSniff ?? DEFAULT_CONTROL_SNIFF)) delete overlay.sniffer
+  if (!settings.useNameserverPolicy && overlay.dns && typeof overlay.dns === 'object')
+    delete (overlay.dns as Record<string, unknown>)['nameserver-policy']
+  return overlay
+}
+
+export function managedSmartPolicy(config: Partial<IAppConfig>): {
+  enabled: boolean
+  useLightGBM: boolean
+  collectData: boolean
+  collectorSize: number
+} {
+  const size = config.smartCollectorSize ?? 100
+  return {
+    enabled: (config.core ?? 'mihomomo') === 'mihomomo' && (config.enableSmartOverride ?? true),
+    useLightGBM: config.smartCoreUseLightGBM ?? false,
+    collectData: config.smartCoreCollectData ?? false,
+    collectorSize: Number.isSafeInteger(size) ? Math.min(100000, Math.max(1, size)) : 100
+  }
 }
