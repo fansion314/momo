@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -197,12 +198,11 @@ func TestBoundedLog(t *testing.T) {
 	}
 }
 
-func TestProtectedTreeAndSnapshotRollback(t *testing.T) {
+func protectedTestRoot(t *testing.T) string {
+	t.Helper()
 	if os.Geteuid() != 0 {
 		t.Skip("protected filesystem invariants require root; exercised by rootless-container UID0 CI")
 	}
-	// /tmp and the bind-mounted container /root may be user-writable. Find an
-	// already-protected ancestor; never chmod a developer/container home for tests.
 	parent := ""
 	for _, candidate := range []string{"/root", "/var/lib", "/Library/Application Support"} {
 		if err := protectedAncestors(candidate); err == nil {
@@ -217,12 +217,77 @@ func TestProtectedTreeAndSnapshotRollback(t *testing.T) {
 	if err != nil {
 		t.Skip(err)
 	}
-	defer os.RemoveAll(root)
-	work := filepath.Join(root, "data")
-	if err = os.Mkdir(work, 0700); err != nil {
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	return root
+}
+
+func TestLegacySocketMigration(t *testing.T) {
+	root := protectedTestRoot(t)
+	runDir := filepath.Join(root, "run")
+	if err := os.Mkdir(runDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(filepath.Join(work, "cache.db"), []byte("old"), 0600); err != nil {
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{
+		Name: filepath.Join(runDir, "helper.sock"),
+		Net:  "unix",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener.SetUnlinkOnClose(false)
+	if err = listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	const socketUID = 65534
+	if err = os.Chown(filepath.Join(runDir, "helper.sock"), socketUID, -1); err != nil {
+		t.Fatal(err)
+	}
+	if err = removeLegacySocket(root, socketUID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Lstat(filepath.Join(runDir, "helper.sock")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("legacy service socket was not removed")
+	}
+
+	legacySocket := filepath.Join(runDir, "helper.sock")
+	if err = os.WriteFile(legacySocket, []byte("not a socket"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = removeLegacySocket(root, socketUID); err == nil {
+		t.Fatal("ordinary file was accepted as a legacy service socket")
+	}
+	if _, err = os.Lstat(legacySocket); err != nil {
+		t.Fatal("unsafe ordinary file was removed")
+	}
+	if err = os.Remove(legacySocket); err != nil {
+		t.Fatal(err)
+	}
+	listener, err = net.ListenUnix("unix", &net.UnixAddr{Name: legacySocket, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener.SetUnlinkOnClose(false)
+	if err = listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chown(legacySocket, socketUID-1, -1); err != nil {
+		t.Fatal(err)
+	}
+	if err = removeLegacySocket(root, socketUID); err == nil {
+		t.Fatal("legacy socket with an unexpected owner was accepted")
+	}
+	if _, err = os.Lstat(legacySocket); err != nil {
+		t.Fatal("legacy socket with an unexpected owner was removed")
+	}
+}
+
+func TestProtectedTreeAndSnapshotRollback(t *testing.T) {
+	root := protectedTestRoot(t)
+	work := filepath.Join(root, "data")
+	if err := os.Mkdir(work, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "cache.db"), []byte("old"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	s := newService(root, installation{})

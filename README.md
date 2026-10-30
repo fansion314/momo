@@ -48,7 +48,7 @@ macOS 归档构建、安装授权、TUN 路由、系统代理／DNS 恢复和休
 
 ## 构建和发布维护
 
-源码和发布共用 `fansion314/momo`：客户端维护在 `clash-momo` 分支，内核维护在 `mihomomo` 分支。本次标签分别为 `clash-momo-v2.0.4-1` 和 `mihomomo-v1.19.33-1`；先发布内核。版本跟踪 Clash Party 稳定版及原版 Mihomo 稳定版，实际源码基线、智能内核来源链和准确提交记录在 `UPSTREAM.json`，保留已有改进；同版本修订递增打包号，macOS 修订单独记录。CI 收齐 Arch 与 macOS 产物后统一发布不可变 Release。Arch 包验证安装、签名、内核能力和系统 Electron 原生模块；macOS 验证 ARM64 应用签名及专用服务。图形授权与实际网络行为另行验收。发布需要 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
+源码和发布共用 `fansion314/momo`：客户端维护在 `clash-momo` 分支，内核维护在 `mihomomo` 分支。本次标签分别为 `clash-momo-v2.0.4-2` 和 `mihomomo-v1.19.33-1`；先发布内核。版本跟踪 Clash Party 稳定版及原版 Mihomo 稳定版，实际源码基线、智能内核来源链和准确提交记录在 `UPSTREAM.json`，保留已有改进；同版本修订递增打包号，macOS 修订单独记录。CI 收齐 Arch 与 macOS 产物后统一发布不可变 Release。Arch 包验证安装、签名、内核能力和系统 Electron 原生模块；macOS 验证 ARM64 应用签名及专用服务。图形授权与实际网络行为另行验收。发布需要 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
 
 源码配方位于 `packaging/arch`。`scripts/prepare-arch.mjs` 对资源进行校验；MetaCubeX 地理数据的上游 `latest` 资源被替换时，校验会失败，需审阅后更新固定摘要。
 

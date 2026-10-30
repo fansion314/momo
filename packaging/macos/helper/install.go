@@ -21,6 +21,12 @@ func launchctl(args ...string) error {
 	return nil
 }
 
+func serviceLoaded() bool {
+	cmd := exec.Command("/bin/launchctl", "print", "system/"+label)
+	cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}
+	return cmd.Run() == nil
+}
+
 func install(uid int, core string) (err error) {
 	if !filepath.IsAbs(core) {
 		return errors.New("core must be an absolute administrator-approved path")
@@ -36,17 +42,13 @@ func install(uid int, core string) (err error) {
 			return e
 		}
 	}
-	if err = mkdirProtected(stateRoot); err != nil {
-		return err
-	}
-	if err = mkdirProtected(filepath.Join(stateRoot, "data")); err != nil {
-		return err
-	}
 	self, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	stage, err := os.MkdirTemp(stateRoot, ".momo-install-")
+	// Stage beside the state directory so a legacy service remains available
+	// until every new executable and validation step is ready.
+	stage, err := os.MkdirTemp(filepath.Dir(stateRoot), ".world.fansionia.clash-momo.install-")
 	if err != nil {
 		return err
 	}
@@ -87,7 +89,12 @@ func install(uid int, core string) (err error) {
 	}
 	// Stop the old daemon before replacement: its signal handler restores network state
 	// and terminates its sole managed child. launchd waits up to ExitTimeOut.
-	_ = launchctl("bootout", "system/"+label)
+	serviceWasLoaded := serviceLoaded()
+	if serviceWasLoaded {
+		if err = launchctl("bootout", "system/"+label); err != nil {
+			return err
+		}
+	}
 	type change struct {
 		target, backup string
 		existed        bool
@@ -107,11 +114,24 @@ func install(uid int, core string) (err error) {
 				_ = os.Rename(c.backup, c.target)
 			}
 		}
-		if _, e := os.Stat(plistPath); e == nil {
+		if serviceWasLoaded {
 			_ = launchctl("bootstrap", "system", plistPath)
 		}
 	}()
 	if err = removeStaleSocket(); err != nil {
+		return err
+	}
+	// v2.0.4-1's installer checked the entire state tree before stopping the
+	// legacy service. Old releases left a UID-owned socket under run/, which
+	// made that validation fail. The socket is the only legacy node that is
+	// intentionally not root-owned, and its directory is still protected.
+	if err = removeLegacySocket(stateRoot, uid); err != nil {
+		return err
+	}
+	if err = mkdirProtected(stateRoot); err != nil {
+		return err
+	}
+	if err = mkdirProtected(filepath.Join(stateRoot, "data")); err != nil {
 		return err
 	}
 	for n, pair := range [][2]string{{"helper", helperPath}, {"core", filepath.Join(stateRoot, "mihomomo")}, {"installation.json", filepath.Join(stateRoot, "installation.json")}, {"daemon.plist", plistPath}} {
@@ -247,4 +267,32 @@ func removeStaleSocket() error {
 		return errors.New("unexpected helper socket path")
 	}
 	return os.Remove(socketPath)
+}
+
+func removeLegacySocket(root string, boundUID int) error {
+	legacyDir := filepath.Join(root, "run")
+	if _, err := os.Lstat(legacyDir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if err := protectedAncestors(legacyDir); err != nil {
+		return err
+	}
+	legacySocket := filepath.Join(legacyDir, "helper.sock")
+	info, err := os.Lstat(legacySocket)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return errors.New("unexpected legacy helper socket path")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || (stat.Uid != 0 && stat.Uid != uint32(boundUID)) {
+		return errors.New("legacy helper socket has an unexpected owner")
+	}
+	return os.Remove(legacySocket)
 }

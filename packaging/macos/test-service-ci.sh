@@ -19,7 +19,23 @@ gh release download "$tag" -R fansion314/momo -p "$archive" -p "$archive.sha256"
 (cd "$stage" && shasum -a 256 -c "$archive.sha256")
 tar -xzf "$stage/$archive" -C "$stage"
 helper="$PWD/dist/macos/Clash Momo.app/Contents/Resources/files/world.fansionia.clash-momo.helper"
+# Reproduce the v2.0.4-1 upgrade path. The old helper chowned its socket to the
+# application UID, while its containing directories remained root-owned.
+legacy_root='/Library/Application Support/world.fansionia.clash-momo'
+legacy_socket="$legacy_root/run/helper.sock"
+sudo mkdir -p "$legacy_root/run"
+sudo chown root:wheel "$legacy_root" "$legacy_root/run"
+sudo chmod 755 "$legacy_root" "$legacy_root/run"
+python3 - "$legacy_socket" <<'PY'
+import socket
+import sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.bind(sys.argv[1])
+s.close()
+PY
+sudo chown "$(id -u):$(id -gn)" "$legacy_socket"
 sudo "$helper" install --uid "$(id -u)" --core "$stage/bin/mihomomo"
+sudo test ! -e "$legacy_socket"
 python3 packaging/macos/test-service-ci.py
 # Reinstall tests the same authorized transaction and protected state retention.
 sudo "$helper" install --uid "$(id -u)" --core "$stage/bin/mihomomo"
