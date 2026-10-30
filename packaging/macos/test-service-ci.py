@@ -230,12 +230,23 @@ try:
     account_root = os.path.join(os.path.dirname(status['workDir']), 'tizi')
     assert status['workDir'] == '/Library/Application Support/world.fansionia.clash-momo/data'
     assert account_root == '/Library/Application Support/world.fansionia.clash-momo/tizi'
+    # lstat(directory) only needs search permission on its parent. The legacy
+    # migration fixture intentionally leaves that parent 0755; account contents
+    # must still be inaccessible behind the root-owned 0700 account directory.
     try:
-        os.lstat(account_root)
+        os.listdir(account_root)
     except PermissionError:
         pass
     else:
-        raise AssertionError('ordinary application UID can inspect the root-only account directory')
+        raise AssertionError('ordinary application UID can list protected account contents')
+    for private_name in ('identity.enc', 'subscription.enc', 'ledger.enc'):
+        try:
+            with open(os.path.join(account_root, private_name), 'rb') as private_file:
+                private_file.read(1)
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError('ordinary application UID can read protected account contents')
     managed_config = 'tizi-managed:\n  state-dir: ' + json.dumps(account_root) + '\n'
     managed_config += '''  smart:
     enabled: true
