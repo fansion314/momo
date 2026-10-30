@@ -1,0 +1,23 @@
+# Keep your existing cloudflare_tls snippet, domain, header updater and logs.
+sub.yama.fansionia.world {
+    import cloudflare_tls
+    encode gzip zstd
+
+    # clash-convert updates this same response-header handler via Caddy Admin API.
+    # Do not add another Subscription-Userinfo header in Rust or reverse_proxy.
+    header Subscription-Userinfo ""
+
+    reverse_proxy 127.0.0.1:9876
+    log {
+        output file /var/log/caddy/tizi.access.log
+        format json
+    }
+}
+
+# Internal only: update subconverter.url in clash-convert to this origin.
+# Never expose /srv publicly or keep the former public Basic Auth file route.
+http://127.0.0.1:9877 {
+    bind 127.0.0.1
+    root * /srv
+    file_server
+}
