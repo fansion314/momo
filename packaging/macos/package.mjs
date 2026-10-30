@@ -45,7 +45,7 @@ for (const [directory, suffix, identifier] of [
   const helperInfoPath = path.join(oldBundle, 'Contents/Info.plist')
   const helperInfo = parse(await readFile(helperInfoPath, 'utf8'))
   await rename(
-    path.join(oldBundle, 'Contents/MacOS', helperInfo.CFBundleExecutable),
+    path.join(oldBundle, 'Contents/MacOS', oldName),
     path.join(oldBundle, 'Contents/MacOS', newName)
   )
   Object.assign(helperInfo, {
