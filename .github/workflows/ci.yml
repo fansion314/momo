@@ -63,6 +63,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash packaging/macos/test-service-ci.sh
+      - name: Check out the pinned application startup test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: fansion314/packages
+          ref: e7170c95647be7bb8e0e1054f6141afab184b95e
+          path: .distribution
+          persist-credentials: false
+      - name: Start the actual app with its Homebrew core
+        run: |
+          brew tap fansion314/packages https://github.com/fansion314/packages.git
+          brew trust fansion314/packages
+          brew install --formula fansion314/packages/mihomomo
+          bash .distribution/homebrew/scripts/test-clash-momo.sh "$PWD/dist/macos/Clash Momo.app"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: clash-momo-macos

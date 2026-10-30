@@ -80,6 +80,17 @@ function isWindowsElevatedSync(): boolean | null {
 export function setupAppLifecycle(): void {
   let sysProxyDisabled = false
   let cleanupPromise: Promise<void> | null = null
+  let signalQuitRequested = false
+  const quitFromSignal = (): void => {
+    if (signalQuitRequested) return
+    signalQuitRequested = true
+    // Use before-quit's bounded cleanup for ordinary and service-managed cores.
+    app.quit()
+  }
+  if (process.platform === 'darwin') {
+    process.on('SIGTERM', quitFromSignal)
+    process.on('SIGINT', quitFromSignal)
+  }
 
   const withTimeout = async (promise: Promise<void>, timeout: number): Promise<void> => {
     let timeoutId: NodeJS.Timeout | null = null
@@ -159,6 +170,10 @@ export function setupAppLifecycle(): void {
   // 并重新下发系统代理。此处不再单独注册监听器，否则多个 resume 处理器会互相叠加。
 
   app.on('will-quit', () => {
+    if (process.platform === 'darwin') {
+      process.off('SIGTERM', quitFromSignal)
+      process.off('SIGINT', quitFromSignal)
+    }
     if (!sysProxyDisabled) {
       disableSysProxySync()
     }
