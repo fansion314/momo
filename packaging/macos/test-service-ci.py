@@ -105,10 +105,6 @@ print('Real service UID, snapshot, core API, reload, utun creation/cleanup, and 
 # authentication policy is covered by the independent Rust server tests.
 port_file = Path(os.environ['RUNNER_TEMP']) / 'momo-tizi-fixture-port'
 fixture_port = int(port_file.read_text()) if port_file.exists() else 0
-probe = socket.socket()
-probe.bind(('127.0.0.1', 0))
-forbidden_controller_port = probe.getsockname()[1]
-probe.close()
 
 
 class Fixture(http.server.BaseHTTPRequestHandler):
@@ -167,10 +163,30 @@ rules:
 
 fixture = http.server.ThreadingHTTPServer(('127.0.0.1', fixture_port), Fixture)
 port_file.write_text(str(fixture.server_port))
+probe = socket.socket()
+probe.bind(('127.0.0.1', 0))
+forbidden_controller_port = probe.getsockname()[1]
 thread = threading.Thread(target=fixture.serve_forever, daemon=True)
 thread.start()
+probe.close()  # Keep the forbidden controller port distinct from the fixture's own listener.
+lease_stop = threading.Event()
+lease_errors = []
+
+
+def renew_tizi_lease():
+    while not lease_stop.wait(2):
+        try:
+            request('POST', '/v1/lease', {}, token)
+        except Exception as error:
+            lease_errors.append(str(error))
+            return
+
+
+lease_thread = None
 try:
     token = request('POST', '/v1/session', {})['token']
+    lease_thread = threading.Thread(target=renew_tizi_lease, daemon=True)
+    lease_thread.start()
     request('POST', '/v1/tizi/action', {'action': 'status'}, expected=401)
     native = request('POST', '/v1/tizi/action', {'action': 'status'}, token)
     assert native['ok'] and native['data']['supported'] and native['data']['keyReady']
@@ -182,6 +198,8 @@ try:
     assert login['data']['subscription']['upload'] == 10
     status = request('GET', '/v1/status')
     account_root = os.path.join(os.path.dirname(status['workDir']), 'tizi')
+    assert status['workDir'] == '/Library/Application Support/world.fansionia.clash-momo/data'
+    assert account_root == '/Library/Application Support/world.fansionia.clash-momo/tizi'
     managed_config = 'tizi-managed:\n  state-dir: ' + json.dumps(account_root) + '\n'
     request('POST', '/v1/core/start', {'config': managed_config, 'files': []}, token)
     deadline = time.monotonic() + 15
@@ -199,7 +217,7 @@ try:
     with socket.socket() as remote_probe:
         remote_probe.settimeout(1)
         assert remote_probe.connect_ex(('127.0.0.1', forbidden_controller_port)) != 0
-    request('PATCH', '/core/configs', {'log-level': 'info'}, token, expected=400)
+    request('PATCH', '/core/configs', {'log-level': 'info'}, token, expected=403)
     request('POST', '/v1/core/config', {'config': managed_config, 'files': [
         {'path': '../tizi/ledger.enc', 'data': 'eA=='}]}, token, expected=400)
     request('POST', '/v1/core/config', {'config': 'tizi-managed:\n  state-dir: /tmp/foreign-account\n',
@@ -213,8 +231,12 @@ try:
     request('POST', '/v1/core/start', {'config': config, 'files': []}, token)
     request('POST', '/v1/core/stop', {}, token)
     assert subprocess.check_output(['sudo', '/usr/bin/shasum', '-a', '256', *account_files]) == original_hashes
+    assert not lease_errors, lease_errors
     print('Published tizi key, real helper bridge, sealed startup, remote controller denial, protected state and private-profile return passed')
 finally:
+    lease_stop.set()
+    if lease_thread:
+        lease_thread.join(timeout=5)
     fixture.shutdown()
     fixture.server_close()
     thread.join(timeout=2)
