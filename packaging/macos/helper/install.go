@@ -99,6 +99,7 @@ func install(uid int, core string) (err error) {
 			return
 		}
 		_ = launchctl("bootout", "system/"+label)
+		_ = removeStaleSocket()
 		for n := len(changes) - 1; n >= 0; n-- {
 			c := changes[n]
 			_ = os.Remove(c.target)
@@ -110,6 +111,9 @@ func install(uid int, core string) (err error) {
 			_ = launchctl("bootstrap", "system", plistPath)
 		}
 	}()
+	if err = removeStaleSocket(); err != nil {
+		return err
+	}
 	for n, pair := range [][2]string{{"helper", helperPath}, {"core", filepath.Join(stateRoot, "mihomomo")}, {"installation.json", filepath.Join(stateRoot, "installation.json")}, {"daemon.plist", plistPath}} {
 		c := change{target: pair[1], backup: filepath.Join(stage, fmt.Sprintf("old-%d", n))}
 		if info, e := os.Lstat(c.target); e == nil {
@@ -221,4 +225,26 @@ func uninstall() error {
 		}
 	}
 	return nil // User data, migration state, logs and protected core remain recoverable.
+}
+
+func removeStaleSocket() error {
+	if _, err := os.Lstat(socketDir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if err := protectedAncestors(socketDir); err != nil {
+		return err
+	}
+	info, err := os.Lstat(socketPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return errors.New("unexpected helper socket path")
+	}
+	return os.Remove(socketPath)
 }
