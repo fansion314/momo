@@ -32,7 +32,7 @@ jobs:
           runuser -u builder -- bash -e <<'CHECKS'
           cd "$GITHUB_WORKSPACE"
           go test -tags with_gvisor ./...
-          go test -race -tags with_gvisor,tizi ./component/tizi ./tunnel/statistic ./config ./hub/route
+          go test -p 1 -race -tags with_gvisor,tizi ./component/tizi ./tunnel/statistic ./config ./hub/route
           CHECKS
       - name: Exercise protected paths in the disposable root container
         run: go test -count=1 -v ./constant
@@ -49,7 +49,7 @@ jobs:
           go-version-file: go.mod
           check-latest: true
       - run: go test -tags with_gvisor ./...
-      - run: go test -race -tags with_gvisor,tizi ./component/tizi ./tunnel/statistic ./config ./hub/route
+      - run: go test -p 1 -race -tags with_gvisor,tizi ./component/tizi ./tunnel/statistic ./config ./hub/route
       - run: bash packaging/macos/build-ci.sh
         env:
           TIZI_BUILD_KEYS: ${{ github.event_name != 'pull_request' && secrets.TIZI_BUILD_KEYS || '' }}
