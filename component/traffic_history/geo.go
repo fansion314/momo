@@ -42,6 +42,10 @@ func openGeo(cfg GeoConfig) *geoReader {
 		if path == "" {
 			return nil
 		}
+		if err := C.ValidateMomoPath(path); err != nil {
+			g.warnings = append(g.warnings, err.Error())
+			return nil
+		}
 		r, err := maxminddb.Open(C.Path.Resolve(path))
 		if err != nil {
 			g.warnings = append(g.warnings, err.Error())

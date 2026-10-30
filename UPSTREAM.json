@@ -2,5 +2,12 @@
   "repository": "https://github.com/vernesong/mihomo.git",
   "branch": "Alpha",
   "commit": "ea99c1511bf6e9293530f519ddf346b235dce5df",
-  "history": "snapshot baseline; subsequent updates are applied as patches"
+  "history": "MetaCubeX v1.19.33 -> vernesong/Alpha snapshot ea99c1511bf6e9293530f519ddf346b235dce5df -> local Momo patches; preserve smart and fork features",
+  "version": "1.19.33",
+  "version_reference": {
+    "repository": "https://github.com/MetaCubeX/mihomo.git",
+    "tag": "v1.19.33",
+    "commit": "3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8",
+    "relationship": "ancestor of snapshot; snapshot includes 496 subsequent commits including smart changes"
+  }
 }

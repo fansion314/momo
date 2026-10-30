@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 )
 
@@ -72,6 +73,9 @@ type FeatureTransforms struct {
 }
 
 func LoadTransformsFromModel(modelPath string) (*FeatureTransforms, error) {
+	if err := C.ValidateMomoPath(modelPath); err != nil {
+		return nil, err
+	}
 	file, err := os.Open(modelPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open model file: %v", err)

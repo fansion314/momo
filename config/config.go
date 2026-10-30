@@ -642,6 +642,21 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 }
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
+	if err := C.ValidateMomoWorkTree(); err != nil {
+		return nil, err
+	}
+	if C.MomoManaged() {
+		rawCfg.NTP.WriteToSystem = false
+		// Controllers are always supplied by the helper, including on reload.
+		rawCfg.ExternalController = ""
+		rawCfg.ExternalControllerTLS = ""
+		rawCfg.ExternalControllerPipe = ""
+		rawCfg.ExternalControllerUnix = C.MomoManagedSocket()
+		rawCfg.ExternalUI = ""
+		rawCfg.ExternalUIURL = ""
+		rawCfg.ExternalUIName = ""
+	}
+
 	config := &Config{}
 	if err := rawCfg.TrafficHistory.Validate(); err != nil {
 		return nil, err
@@ -882,7 +897,7 @@ func parseNTP(cfg *RawConfig) (*NTP, error) {
 		Port:          cfg.NTP.Port,
 		Interval:      cfg.NTP.Interval,
 		DialerProxy:   cfg.NTP.DialerProxy,
-		WriteToSystem: cfg.NTP.WriteToSystem,
+		WriteToSystem: C.MomoAllowSystemTimeWrite(cfg.NTP.WriteToSystem),
 	}, nil
 }
 

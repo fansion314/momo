@@ -81,6 +81,9 @@ func (u *CoreUpdater) CoreBaseName() string {
 }
 
 func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) (err error) {
+	if C.MomoManaged() {
+		return fmt.Errorf("core updates are disabled in momo managed mode")
+	}
 	u.mu.Lock()
 	defer u.mu.Unlock()
 

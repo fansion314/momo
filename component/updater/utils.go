@@ -9,6 +9,7 @@ import (
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 
 	"github.com/metacubex/http"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 const defaultHttpTimeout = time.Second * 90
@@ -26,5 +27,8 @@ func downloadForBytes(url string) ([]byte, error) {
 }
 
 func saveFile(bytes []byte, path string) error {
+	if err := C.ValidateMomoPath(path); err != nil {
+		return err
+	}
 	return os.WriteFile(path, bytes, 0o644)
 }

@@ -79,6 +79,9 @@ func (c *CacheFile) Close() error {
 }
 
 func initCache() {
+	if err := C.ValidateMomoPath(C.Path.Cache()); err != nil {
+		log.Fatalln("Unsafe cache path: %s", err)
+	}
 	options := bbolt.Options{Timeout: time.Second, NoStatistics: true}
 	db, err := bbolt.Open(C.Path.Cache(), fileMode, &options)
 	switch err {

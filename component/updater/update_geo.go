@@ -46,6 +46,9 @@ func SetGeoUpdateInterval(newGeoUpdateInterval int) {
 func UpdateMMDB() (err error) {
 	vehicle := resource.NewHTTPVehicle(geodata.MmdbUrl(), C.Path.MMDB(), "", nil, defaultHttpTimeout, 0)
 	var oldHash utils.HashType
+	if err := C.ValidateMomoPath(vehicle.Path()); err != nil {
+		return err
+	}
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
 		oldHash = utils.MakeHash(buf)
 	}
@@ -77,6 +80,9 @@ func UpdateMMDB() (err error) {
 func UpdateASN() (err error) {
 	vehicle := resource.NewHTTPVehicle(geodata.ASNUrl(), C.Path.ASN(), "", nil, defaultHttpTimeout, 0)
 	var oldHash utils.HashType
+	if err := C.ValidateMomoPath(vehicle.Path()); err != nil {
+		return err
+	}
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
 		oldHash = utils.MakeHash(buf)
 	}
@@ -108,6 +114,9 @@ func UpdateASN() (err error) {
 func UpdateGeoIp() (err error) {
 	vehicle := resource.NewHTTPVehicle(geodata.GeoIpUrl(), C.Path.GeoIP(), "", nil, defaultHttpTimeout, 0)
 	var oldHash utils.HashType
+	if err := C.ValidateMomoPath(vehicle.Path()); err != nil {
+		return err
+	}
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
 		oldHash = utils.MakeHash(buf)
 	}
@@ -136,6 +145,9 @@ func UpdateGeoIp() (err error) {
 func UpdateGeoSite() (err error) {
 	vehicle := resource.NewHTTPVehicle(geodata.GeoSiteUrl(), C.Path.GeoSite(), "", nil, defaultHttpTimeout, 0)
 	var oldHash utils.HashType
+	if err := C.ValidateMomoPath(vehicle.Path()); err != nil {
+		return err
+	}
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
 		oldHash = utils.MakeHash(buf)
 	}

@@ -22,7 +22,7 @@ Mihomomo 保留 Smart 代理选择与元数据，增加本地 SQLite 流量历�
 
 ## 维护与发布
 
-源码和发布位于 `fansion314/momo` 的 `mihomomo` 分支。包版本为 `0.1.0-2`，标签为 `mihomomo-v0.1.0-2`。CI 在 Arch 中以普通用户执行检查、构建、安装和能力验证，然后签名软件包并发布配方包。发布需要仓库的 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
+源码和发布位于 `fansion314/momo` 的 `mihomomo` 分支。包版本为 `1.19.33-1`，标签为 `mihomomo-v1.19.33-1`。CI 在 Arch 中以普通用户执行检查、构建、安装和能力验证，然后签名软件包并发布配方包。发布需要仓库的 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
 
 分支历史仅保留一条上游快照基线和后续维护提交，上游来源记录在 `UPSTREAM.json`。更新时在干净工作区 fetch 对应上游分支，生成 `UPSTREAM.json` 所记提交到新上游提交的完整二进制补丁，以 `git apply --3way --index` 应用，审阅冲突并运行验证，更新来源记录后创建新的维护提交。不要直接 merge 上游分支或推送上游 refs，以免重新引入旧历史；不要恢复上游多平台发布工作流。
 
@@ -31,3 +31,12 @@ Mihomomo 保留 Smart 代理选择与元数据，增加本地 SQLite 流量历�
 感谢 [Mihomo Smart](https://github.com/vernesong/mihomo)、[Mihomo](https://github.com/MetaCubeX/mihomo)、[Clash](https://github.com/Dreamacro/clash)、[sing-box](https://github.com/SagerNet/sing-box)、[go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)、[v2ray-core](https://github.com/v2ray/v2ray-core)、[wireguard-go](https://github.com/WireGuard/wireguard-go)、[clash-plus-pro](https://github.com/yaling888/clash-plus-pro) 和所有贡献者。
 
 本项目依照 [GPL-3.0](LICENSE) 发布。上游 README 的原始命名声明保存在 [NOTICE.upstream.md](NOTICE.upstream.md)。
+
+
+### Momo macOS 受管模式
+
+`mihomomo --momo-capabilities` 输出 JSON 能力协议：`protocol: 1`、`version` 和 `managedMode`（仅 macOS 为 true）。常规 CLI 与 Linux 启动方式保持原有行为。
+
+macOS 专用 helper 以 root 启动 `mihomomo --momo-managed -d <workdir> -f <workdir>/config.yaml -ext-ctl-unix <workdir>/core.sock`。工作目录必须位于 `/Library/Application Support/world.fansionia.clash-momo/` 下，由 root 所有且权限为 `0700`；所有祖先及已有资源都必须由 root 所有、不可被组或其他用户写入。符号链接、普通文件硬链接、特殊设备和目录外路径会被拒绝。helper 必须把配置及其引用资源复制为独立的受保护文件，不能直接引用用户目录。
+
+该模式只开放 `0600` Unix 控制 socket，忽略配置中的其他控制器及外部 UI，禁止 shell hooks、内核自重启和升级；配置重载、provider、数据库及 geo/model 文件读取仍受路径约束。helper 应提供最小环境，仅按需传递 `CLASH_AGE_SECRET_KEY`，不继承路径安全绕过变量。

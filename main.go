@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -32,6 +33,8 @@ import (
 )
 
 var (
+	momoCapabilities              bool
+	momoManaged                   bool
 	version                       bool
 	testConfig                    bool
 	geodataMode                   bool
@@ -74,10 +77,31 @@ func init() {
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of mihomo")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
+	flag.BoolVar(&momoCapabilities, "momo-capabilities", false, "show Momo capabilities as JSON")
+	flag.BoolVar(&momoManaged, "momo-managed", false, "run under the dedicated macOS Momo helper")
 	flag.Parse()
 }
 
 func main() {
+	if momoCapabilities {
+		_ = json.NewEncoder(os.Stdout).Encode(struct {
+			Protocol    int    `json:"protocol"`
+			Version     string `json:"version"`
+			ManagedMode bool   `json:"managedMode"`
+		}{1, C.Version, runtime.GOOS == "darwin"})
+		return
+	}
+	if momoManaged {
+		if err := C.EnableMomoManaged(homeDir, externalControllerUnix); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if postUp != "" || postDown != "" || configString != "" || configFile == "-" || externalUI != "" || externalController != "" || externalControllerTLS != "" || externalControllerPipe != "" || flag.NArg() != 0 {
+			fmt.Fprintln(os.Stderr, "momo managed mode forbids shell hooks, inline configuration, public controllers and subcommands")
+			os.Exit(1)
+		}
+	}
+
 	// Defensive programming: panic when code mistakenly calls net.DefaultResolver
 	net.DefaultResolver.PreferGo = true
 	net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -164,6 +188,10 @@ func main() {
 			}
 		} else {
 			configFile = filepath.Join(C.Path.HomeDir(), C.Path.Config())
+		}
+		if err := C.ValidateMomoPath(configFile); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
 		C.SetConfig(configFile)
 

@@ -47,7 +47,7 @@ func ReCreateNTPService(server string, interval time.Duration, dialerProxy strin
 		ticker:         time.NewTicker(interval * time.Minute),
 		ctx:            ctx,
 		cancel:         cancel,
-		syncSystemTime: syncSystemTime,
+		syncSystemTime: C.MomoAllowSystemTimeWrite(syncSystemTime),
 	}
 	globalSrv.Start()
 }
@@ -80,7 +80,7 @@ func (srv *Service) update() error {
 			log.Infoln("System clock is behind NTP time by %s", -offset)
 		}
 		mihomoNtp.SetOffset(offset)
-		if srv.syncSystemTime {
+		if C.MomoAllowSystemTimeWrite(srv.syncSystemTime) {
 			timeNow := response.Time
 			syncErr := setSystemTime(timeNow)
 			if syncErr == nil {

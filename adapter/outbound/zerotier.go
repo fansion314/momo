@@ -179,11 +179,18 @@ func (c *zeroTierPacketConn) WriteTo(packet []byte, destination net.Addr) (int, 
 }
 
 func (f zeroTierStateFS) Open(name string) (fs.File, error) {
-	return os.Open(filepath.Join(f.directory, filepath.FromSlash(name)))
+	path := filepath.Join(f.directory, filepath.FromSlash(name))
+	if err := C.ValidateMomoPath(path); err != nil {
+		return nil, err
+	}
+	return os.Open(path)
 }
 
 func (f zeroTierStateFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 	path := filepath.Join(f.directory, filepath.FromSlash(name))
+	if err := C.ValidateMomoPath(path); err != nil {
+		return err
+	}
 	err := os.MkdirAll(filepath.Dir(path), 0700)
 	if err == nil {
 		err = os.WriteFile(path, data, perm)
@@ -195,7 +202,11 @@ func (f zeroTierStateFS) WriteFile(name string, data []byte, perm fs.FileMode) e
 }
 
 func (f zeroTierStateFS) Remove(name string) error {
-	return os.Remove(filepath.Join(f.directory, filepath.FromSlash(name)))
+	path := filepath.Join(f.directory, filepath.FromSlash(name))
+	if err := C.ValidateMomoPath(path); err != nil {
+		return err
+	}
+	return os.Remove(path)
 }
 
 func NewZeroTier(option ZeroTierOption) (*ZeroTier, error) {

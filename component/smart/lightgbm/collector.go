@@ -178,6 +178,9 @@ func (c *DataCollector) AddSample(input *smart.ModelInput, metadata *C.Metadata,
 }
 
 func (c *DataCollector) initializeWriter() error {
+	if err := C.ValidateMomoPath(c.dataPath); err != nil {
+		return err
+	}
 	var err error
 
 	log.Infoln("[Smart] Initializing data collector for %s", c.dataPath)

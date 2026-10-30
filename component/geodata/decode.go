@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 
+	C "github.com/metacubex/mihomo/constant"
+
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
@@ -21,6 +23,9 @@ var (
 )
 
 func Decode(filename, code string) ([]byte, error) {
+	if err := C.ValidateMomoPath(filename); err != nil {
+		return nil, err
+	}
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())

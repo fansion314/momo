@@ -1,8 +1,8 @@
 export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 pkgname=mihomomo
-pkgver=0.1.0
-pkgrel=3
+pkgver=1.19.33
+pkgrel=1
 pkgdesc='Mihomo-based proxy core for Clash Momo'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'

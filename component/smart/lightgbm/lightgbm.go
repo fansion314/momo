@@ -585,6 +585,9 @@ func GetModel() *WeightModel {
 }
 
 func (m *WeightModel) loadModel(path string) error {
+	if err := C.ValidateMomoPath(path); err != nil {
+		return err
+	}
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -654,6 +657,9 @@ func LgbmUrl() string {
 }
 
 func downloadModel(path string) (err error) {
+	if err = C.ValidateMomoPath(path); err != nil {
+		return
+	}
 	modelUrl := LgbmUrl()
 	if modelUrl == "" {
 		modelUrl = GetModelDownloadURL()

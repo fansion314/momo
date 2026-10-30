@@ -96,6 +96,9 @@ func verifyGeodata(r io.Reader) error {
 }
 
 func verifyGeodataFile(path string) error {
+	if err := C.ValidateMomoPath(path); err != nil {
+		return err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return err

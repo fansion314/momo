@@ -57,6 +57,9 @@ func NewTLSKeyPairLoader(certificate, privateKey string) (func() (*tls.Certifica
 	if watcher, err := fswatch.NewWatcher(fswatch.Options{Path: []string{certificate, privateKey}, Callback: func(path string) {
 		updateMutex.Lock()
 		defer updateMutex.Unlock()
+		if C.ValidateMomoPath(certificate) != nil || C.ValidateMomoPath(privateKey) != nil {
+			return
+		}
 		if newCert, err := tls.LoadX509KeyPair(certificate, privateKey); err == nil {
 			cert = newCert
 		}

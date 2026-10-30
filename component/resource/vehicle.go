@@ -11,6 +11,7 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
+	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 
 	"github.com/metacubex/http"
@@ -36,6 +37,9 @@ func SetETag(b bool) {
 }
 
 func safeWrite(path string, buf []byte) error {
+	if err := C.ValidateMomoPath(path); err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -64,6 +68,9 @@ func (f *FileVehicle) Url() string {
 }
 
 func (f *FileVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []byte, hash utils.HashType, err error) {
+	if err = C.ValidateMomoPath(f.path); err != nil {
+		return
+	}
 	buf, err = os.ReadFile(f.path)
 	if err != nil {
 		return

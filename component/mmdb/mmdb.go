@@ -44,6 +44,9 @@ func LoadFromBytes(buffer []byte) {
 }
 
 func Verify(path string) bool {
+	if C.ValidateMomoPath(path) != nil {
+		return false
+	}
 	instance, err := maxminddb.Open(path)
 	if err == nil {
 		instance.Close()
@@ -55,6 +58,9 @@ func IPInstance() IPReader {
 	ipOnce.Do(func() {
 		mmdbPath := C.Path.MMDB()
 		log.Infoln("Load MMDB file: %s", mmdbPath)
+		if err := C.ValidateMomoPath(mmdbPath); err != nil {
+			log.Fatalln("Unsafe MMDB path: %s", err)
+		}
 		mmdb, err := maxminddb.Open(mmdbPath)
 		if err != nil {
 			log.Fatalln("Can't load MMDB: %s", err.Error())
@@ -77,6 +83,9 @@ func ASNInstance() ASNReader {
 	asnOnce.Do(func() {
 		ASNPath := C.Path.ASN()
 		log.Infoln("Load ASN file: %s", ASNPath)
+		if err := C.ValidateMomoPath(ASNPath); err != nil {
+			log.Fatalln("Unsafe ASN path: %s", err)
+		}
 		asn, err := maxminddb.Open(ASNPath)
 		if err != nil {
 			log.Fatalln("Can't load ASN: %s", err.Error())

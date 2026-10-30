@@ -72,6 +72,9 @@ func NewUiUpdater(externalUI, externalUIURL, externalUIName string) *UIUpdater {
 }
 
 func (u *UIUpdater) AutoDownloadUI() {
+	if C.MomoManaged() {
+		return
+	}
 	u.mutex.Lock()
 	defer u.mutex.Unlock()
 	if u.autoDownloadUI {
@@ -89,6 +92,9 @@ func (u *UIUpdater) AutoDownloadUI() {
 }
 
 func (u *UIUpdater) DownloadUI() error {
+	if C.MomoManaged() {
+		return fmt.Errorf("UI updates are disabled in momo managed mode")
+	}
 	u.mutex.Lock()
 	defer u.mutex.Unlock()
 	return u.downloadUI()
@@ -113,6 +119,9 @@ func detectFileType(data []byte) compressionType {
 }
 
 func (u *UIUpdater) downloadUI() error {
+	if C.MomoManaged() {
+		return fmt.Errorf("UI updates are disabled in momo managed mode")
+	}
 	data, err := downloadForBytes(u.externalUIURL)
 	if err != nil {
 		return fmt.Errorf("can't download file: %w", err)

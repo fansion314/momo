@@ -77,6 +77,16 @@ func openDatabase(ctx context.Context, path string, timezone ...string) (*sql.DB
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := C.ValidateMomoPath(path); err != nil {
+		return nil, nil, err
+	}
+	// SQLite creates these companion files automatically; reject pre-existing
+	// unsafe WAL/journal paths before handing the database to the driver.
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		if err := C.ValidateMomoPath(path + suffix); err != nil {
+			return nil, nil, err
+		}
+	}
 	u, err := databaseURL(path)
 	if err != nil {
 		return nil, nil, err

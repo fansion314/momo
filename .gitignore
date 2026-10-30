@@ -29,3 +29,5 @@ test/config/cache*
 
 # Local validation artifacts
 /.cache/
+/dist/
+__pycache__/

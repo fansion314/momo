@@ -90,6 +90,13 @@ func (c Cors) Apply(r chi.Router) {
 }
 
 func ReCreateServer(cfg *Config) {
+	if C.MomoManaged() {
+		cfg.Addr, cfg.TLSAddr, cfg.PipeAddr = "", "", ""
+		cfg.UnixAddr = C.MomoManagedSocket()
+		cfg.IsDebug = false
+		uiPath = ""
+	}
+
 	go start(cfg)
 	go startTLS(cfg)
 	go startUnix(cfg)
@@ -136,10 +143,12 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 		r.Mount("/cache", cacheRouter())
 		r.Mount("/dns", dnsRouter())
 		r.Mount("/storage", storageRouter())
-		if !embedMode { // disallow restart in embed mode
+		if !embedMode && !C.MomoManaged() { // disallow restart in embed and managed modes
 			r.Mount("/restart", restartRouter())
 		}
-		r.Mount("/upgrade", upgradeRouter())
+		if !C.MomoManaged() {
+			r.Mount("/upgrade", upgradeRouter())
+		}
 		addExternalRouters(r)
 
 	})
@@ -259,6 +268,13 @@ func startUnix(cfg *Config) {
 	// handle addr
 	if len(cfg.UnixAddr) > 0 {
 		addr := C.Path.Resolve(cfg.UnixAddr)
+		if C.MomoManaged() && addr != C.MomoManagedSocket() {
+			return
+		}
+		if err := C.ValidateMomoPath(addr); err != nil {
+			log.Errorln("External controller unix path error: %s", err)
+			return
+		}
 
 		dir := filepath.Dir(addr)
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -284,7 +300,15 @@ func startUnix(cfg *Config) {
 			log.Errorln("External controller unix listen error: %s", err)
 			return
 		}
-		_ = os.Chmod(addr, 0o666)
+		mode := os.FileMode(0o666)
+		if C.MomoManaged() {
+			mode = 0o600
+		}
+		if err := os.Chmod(addr, mode); err != nil && C.MomoManaged() {
+			_ = l.Close()
+			log.Errorln("External controller unix permissions error: %s", err)
+			return
+		}
 		log.Infoln("RESTful API unix listening at: %s", l.Addr().String())
 
 		server := &http.Server{

@@ -49,6 +49,9 @@ func UpdateLgbmModel() (err error) {
 
 	vehicle := resource.NewHTTPVehicle(modelUrl, C.Path.SmartModel(), "", nil, defaultHttpTimeout, 0)
 	var oldHash utils.HashType
+	if err := C.ValidateMomoPath(vehicle.Path()); err != nil {
+		return err
+	}
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
 		oldHash = utils.MakeHash(buf)
 	}
@@ -64,7 +67,11 @@ func UpdateLgbmModel() (err error) {
 		return fmt.Errorf("can't download LightGBM model file: no data")
 	}
 
-	tmpFile, err := os.CreateTemp("", "lgbm_model_*.bin")
+	tmpDir := ""
+	if C.MomoManaged() {
+		tmpDir = C.Path.HomeDir()
+	}
+	tmpFile, err := os.CreateTemp(tmpDir, "lgbm_model_*.bin")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file for validation: %w", err)
 	}

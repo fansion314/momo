@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"syscall"
 
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/hub/executor"
 	"github.com/metacubex/mihomo/log"
 
@@ -43,6 +44,9 @@ func restart(w http.ResponseWriter, r *http.Request) {
 }
 
 func restartExecutable(execPath string) {
+	if C.MomoManaged() {
+		return
+	}
 	var err error
 	executor.Shutdown()
 	if runtime.GOOS == "windows" {

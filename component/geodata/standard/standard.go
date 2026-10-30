@@ -16,6 +16,9 @@ import (
 )
 
 func ReadFile(path string) ([]byte, error) {
+	if err := C.ValidateMomoPath(path); err != nil {
+		return nil, err
+	}
 	reader, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -81,6 +84,9 @@ type standardLoader struct{}
 
 func (d standardLoader) LoadSiteByPath(filename, list string) ([]*router.Domain, error) {
 	path := C.Path.GetAssetLocation(filename)
+	if err := C.ValidateMomoPath(path); err != nil {
+		return nil, err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())
@@ -115,6 +121,9 @@ func (d standardLoader) LoadSiteByBytes(geositeBytes []byte, list string) ([]*ro
 
 func (d standardLoader) LoadIPByPath(filename, country string) ([]*router.CIDR, error) {
 	path := C.Path.GetAssetLocation(filename)
+	if err := C.ValidateMomoPath(path); err != nil {
+		return nil, err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())

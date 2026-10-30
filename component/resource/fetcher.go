@@ -10,6 +10,7 @@ import (
 
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/slowdown"
+	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 
@@ -54,6 +55,9 @@ func (f *Fetcher[V]) UpdatedAt() time.Time {
 }
 
 func (f *Fetcher[V]) Initial() (V, error) {
+	if err := C.ValidateMomoPath(f.vehicle.Path()); err != nil {
+		return lo.Empty[V](), err
+	}
 	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
 		// local file exists, use it first
 		buf, err := os.ReadFile(f.vehicle.Path())
@@ -127,6 +131,9 @@ func (f *Fetcher[V]) SideUpdate(buf []byte) (V, bool, error) {
 }
 
 func (f *Fetcher[V]) loadBuf(buf []byte, hash utils.HashType, updateFile bool) (V, bool, error) {
+	if err := C.ValidateMomoPath(f.vehicle.Path()); err != nil {
+		return lo.Empty[V](), false, err
+	}
 	f.loadBufMutex.Lock()
 	defer f.loadBufMutex.Unlock()
 

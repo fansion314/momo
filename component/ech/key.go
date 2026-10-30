@@ -137,6 +137,9 @@ func LoadECHKey(key string, tlsConfig *tls.Config) error {
 	if watcher, err := fswatch.NewWatcher(fswatch.Options{Path: []string{key}, Callback: func(path string) {
 		updateMutex.Lock()
 		defer updateMutex.Unlock()
+		if C.ValidateMomoPath(key) != nil {
+			return
+		}
 		if echKey, err := os.ReadFile(key); err == nil {
 			if newEchKeys, err := loadECHKey(echKey); err == nil {
 				echKeys = newEchKeys

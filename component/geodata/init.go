@@ -69,6 +69,9 @@ func SetASNUrl(url string) {
 }
 
 func downloadToPath(url string, path string) (err error) {
+	if err = C.ValidateMomoPath(path); err != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
 	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, nil, nil)

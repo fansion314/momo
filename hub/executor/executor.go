@@ -47,6 +47,9 @@ import (
 var mux sync.Mutex
 
 func readConfig(path string) ([]byte, error) {
+	if err := C.ValidateMomoPath(path); err != nil {
+		return nil, err
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, err
 	}
