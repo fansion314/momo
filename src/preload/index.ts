@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // 允许的 invoke channels 白名单
 const validInvokeChannels = [
+  // macOS service
+  'macServiceStatus',
+  'macServiceLogs',
+  'installMacService',
+  'uninstallMacService',
   // Mihomo API
   'mihomoVersion',
   'mihomoCloseConnection',

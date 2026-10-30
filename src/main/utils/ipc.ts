@@ -4,6 +4,12 @@ import { readFile } from 'fs/promises'
 import { app, ipcMain } from 'electron'
 import i18next from 'i18next'
 import {
+  macServiceStatus,
+  installMacService,
+  uninstallMacService,
+  macServiceLogs
+} from '../core/macos-service'
+import {
   mihomoChangeProxy,
   mihomoCloseAllConnections,
   mihomoCloseConnection,
@@ -346,6 +352,10 @@ const asyncHandlers: Record<string, AsyncFn> = {
   startMonitor,
   quitWithoutCore,
   // System
+  macServiceStatus,
+  macServiceLogs,
+  installMacService,
+  uninstallMacService,
   triggerSysProxy,
   checkTunPermissions,
   grantTunPermissions,

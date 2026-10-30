@@ -1,4 +1,4 @@
-name: Release clash-momo Arch package
+name: Release clash-momo for Arch and macOS
 on:
   push:
     tags: ['clash-momo-v*']
@@ -74,7 +74,7 @@ jobs:
           path: /tmp/build-output/*
           if-no-files-found: error
   publish:
-    needs: [resolve, build]
+    needs: [resolve, checks, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -84,7 +84,8 @@ jobs:
           ref: ${{ needs.resolve.outputs.commit }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: clash-momo-arch
+          pattern: clash-momo-*
+          merge-multiple: true
           path: dist
       - name: Sign and publish immutable release
         env:
@@ -100,7 +101,7 @@ jobs:
           fi
           python3 packaging/arch/sign.py directory dist --tag "$TAG"
           (cd dist && for package in *.pkg.tar.zst; do sha256sum "$package" > "$package.sha256"; done)
-          gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes "Arch Linux x86_64 package and source recipe."
+          gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes "Arch Linux x86_64 and macOS ARM64 packages, checksums, and source recipes."
   notify:
     needs: publish
     runs-on: ubuntu-latest
@@ -115,4 +116,4 @@ jobs:
       - name: Dispatch package distribution
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
-        run: gh workflow run downstream.yml -R fansion314/packages --ref main -f project=clash-momo -f platform=arch
+        run: gh workflow run downstream.yml -R fansion314/packages --ref main -f project=clash-momo -f platform=all

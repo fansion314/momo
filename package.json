@@ -1,7 +1,7 @@
 {
   "name": "clash-momo",
-  "version": "0.1.2",
-  "description": "Arch Linux proxy client for Mihomomo",
+  "version": "2.0.4",
+  "description": "Clash Momo proxy client for Mihomomo on Linux and macOS",
   "type": "module",
   "main": "./out/main/index.js",
   "author": "Fansionia",
@@ -19,9 +19,10 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck:test": "tsc --noEmit -p tsconfig.tests.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web && pnpm run typecheck:test",
-    "prepare": "node scripts/prepare-arch.mjs",
+    "prepare": "node scripts/prepare.mjs",
     "build:linux": "electron-vite build",
-    "dev": "ELECTRON_EXEC_PATH=/usr/bin/electron electron-vite dev"
+    "dev": "node scripts/dev.mjs",
+    "build:macos": "electron-vite build && node packaging/macos/package.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

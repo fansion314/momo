@@ -51,6 +51,7 @@ export function exePath(): string {
 
 export function resourcesDir(): string {
   if (isSystemInstall()) return '/usr/lib/clash-momo/resources'
+  if (process.platform === 'darwin' && app.isPackaged) return process.resourcesPath
   if (is.dev) {
     return path.join(__dirname, '../../extra')
   } else {
@@ -71,12 +72,12 @@ export function themesDir(): string {
 }
 
 export function mihomoCoreDir(): string {
-  return '/usr/bin'
+  return process.platform === 'darwin' ? '/opt/homebrew/opt/mihomomo/bin' : '/usr/bin'
 }
 
 // A single system-owned core. Legacy arguments are accepted only for old callers.
 export function mihomoCorePath(_core?: string): string {
-  return '/usr/bin/mihomomo'
+  return path.join(mihomoCoreDir(), 'mihomomo')
 }
 
 export function appConfigPath(): string {

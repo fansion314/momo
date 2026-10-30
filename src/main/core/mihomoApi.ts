@@ -1,4 +1,5 @@
 import { createConnection } from 'net'
+import path from 'path'
 import axios, { AxiosInstance } from 'axios'
 import WebSocket from 'ws'
 import { app } from 'electron'
@@ -9,7 +10,15 @@ import { tray } from '../resolve/tray'
 import { calcTraffic } from '../utils/calc'
 import { floatingWindow } from '../resolve/floatingWindow'
 import { createLogger } from '../utils/logger'
-import { mihomoWorkConfigPath } from '../utils/dirs'
+import { mihomoWorkDir, mihomoWorkConfigPath } from '../utils/dirs'
+import { createMacCoreSnapshot } from './macos-snapshot'
+import {
+  MAC_HELPER_SOCKET,
+  isMacServiceActive,
+  macServiceHeaders,
+  macServiceRequest,
+  macServiceStatus
+} from './macos-service'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { syncControlDnsAfterApply } from './dnsOverrideGuard'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
@@ -152,22 +161,25 @@ function createMihomoWebSocket(endpoint: string): {
   ipcPath: string
   wsUrl: string
 } {
-  const ipcPath = getMihomoIpcPath()
-  const wsUrl = `ws://localhost${endpoint}`
+  const ipcPath = isMacServiceActive() ? MAC_HELPER_SOCKET : getMihomoIpcPath()
+  const wsUrl = `ws://localhost${isMacServiceActive() ? '/core' : ''}${endpoint}`
 
   // Keep the named pipe path out of ws+unix URLs. URL parsing percent-encodes
   // non-ASCII Windows usernames, which changes the pipe name before ws connects.
   const createIpcConnection = (() => createConnection({ path: ipcPath })) as typeof createConnection
 
   return {
-    ws: new WebSocket(wsUrl, { createConnection: createIpcConnection }),
+    ws: new WebSocket(wsUrl, {
+      createConnection: createIpcConnection,
+      headers: macServiceHeaders()
+    }),
     ipcPath,
     wsUrl
   }
 }
 
 export const getAxios = async (force: boolean = false): Promise<AxiosInstance> => {
-  const dynamicIpcPath = getMihomoIpcPath()
+  const dynamicIpcPath = isMacServiceActive() ? MAC_HELPER_SOCKET : getMihomoIpcPath()
 
   if (axiosIns && !force && currentIpcPath === dynamicIpcPath) {
     return axiosIns
@@ -177,7 +189,9 @@ export const getAxios = async (force: boolean = false): Promise<AxiosInstance> =
   mihomoApiLogger.info(`Creating axios instance with path: ${dynamicIpcPath}`)
 
   axiosIns = axios.create({
-    baseURL: `http://localhost`,
+    baseURL: `http://localhost${isMacServiceActive() ? '/core' : ''}`,
+    headers: macServiceHeaders(),
+    proxy: false,
     socketPath: dynamicIpcPath,
     timeout: 15000
   })
@@ -453,7 +467,25 @@ export const mihomoHotReloadConfig = async (): Promise<void> => {
   mihomoApiLogger.info(`hot reload config path: ${configPath}`)
   const instance = await getAxios()
   try {
-    await instance.put('/configs?force=true', { path: configPath })
+    if (isMacServiceActive()) {
+      const status = await macServiceStatus()
+      if (!status.workDir) throw new Error('Service work directory is unavailable')
+      const { getProfileItem } = await import('../config')
+      const secret = (await getProfileItem(current))?.ageSecretKey
+      await macServiceRequest(
+        '/v1/core/config',
+        await createMacCoreSnapshot(
+          mihomoWorkDir(),
+          path.resolve(configPath),
+          status.workDir,
+          secret,
+          status.dataMigrated
+        ),
+        60000
+      )
+    } else {
+      await instance.put('/configs?force=true', { path: configPath })
+    }
   } catch (error) {
     if (hasCoreProcess()) throw error
     mihomoApiLogger.warn('Core exited before hot reload completed, restarting core', error)

@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { DEFAULT_YAML_MAX_ALIAS_COUNT } from '../../../../shared/appConfig'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
+import MacosServiceConfig from './macos-service-config'
 
 interface SsidProfileEntry {
   ssid: string
@@ -134,6 +135,7 @@ const MihomoConfig: React.FC = () => {
   }
   return (
     <SettingCard>
+      {platform === 'darwin' && <MacosServiceConfig />}
       <SettingItem title={t('mihomo.userAgent')} divider>
         <Input
           size="sm"

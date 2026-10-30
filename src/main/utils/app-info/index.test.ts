@@ -89,10 +89,15 @@ afterEach(() => {
   else Object.defineProperty(process, 'resourcesPath', { configurable: true, value: undefined })
 })
 
-it.each([false, true])(
-  'shares macOS bundle work across helpers (packaged=%s) with bounded 64px extraction',
-  async (packaged) => {
+it.each([
+  [false, false],
+  [true, false],
+  [true, true]
+])(
+  'shares macOS bundle work across helpers (packaged=%s, asar=%s) with bounded 64px extraction',
+  async (packaged, asar) => {
     settings.packaged = packaged
+    if (asar) settings.root = '/resources/app.asar'
     const { getAppInfo } = await import('./index')
     const paths = [executable, `${root}/Browser.app/Contents/MacOS/Browser`, executable]
     const results = await Promise.all(paths.map((processPath) => getAppInfo({ processPath })))
@@ -104,7 +109,7 @@ it.each([false, true])(
     )
     expect(execFile).toHaveBeenCalledTimes(2)
     expect(execFile).toHaveBeenCalledWith(
-      packaged
+      asar
         ? '/resources/app.asar.unpacked/node_modules/file-icon/file-icon'
         : `${root}/node_modules/file-icon/file-icon`,
       [JSON.stringify([{ appOrPID: `${root}/Browser.app`, size: 64 }])],

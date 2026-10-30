@@ -59,7 +59,10 @@ beforeEach(() => {
   vi.resetModules()
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 describe('configureAppPaths', () => {
   it('isolates an unpackaged local development app', async () => {
@@ -88,10 +91,33 @@ describe('configureAppPaths', () => {
     expect(resourcesDir()).toBe('/usr/lib/clash-momo/resources')
   })
 
+  it('resolves packaged loose macOS app resources from Contents/Resources', async () => {
+    packaged = true
+    appPath = '/Applications/Clash Momo.app/Contents/Resources/app'
+    vi.stubGlobal(
+      'process',
+      new Proxy(process, {
+        get: (target, key) =>
+          key === 'platform'
+            ? 'darwin'
+            : key === 'resourcesPath'
+              ? '/Applications/Clash Momo.app/Contents/Resources'
+              : Reflect.get(target, key)
+      })
+    )
+    const { resourcesDir, resourcesFilesDir } = await import('./dirs')
+    expect(resourcesDir()).toBe('/Applications/Clash Momo.app/Contents/Resources')
+    expect(resourcesFilesDir()).toBe('/Applications/Clash Momo.app/Contents/Resources/files')
+  })
+
   it('resolves every legacy core choice to the sole system binary', async () => {
     const { mihomoCorePath } = await import('./dirs')
     for (const core of ['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific', 'mihomomo']) {
-      expect(mihomoCorePath(core)).toBe('/usr/bin/mihomomo')
+      expect(mihomoCorePath(core)).toBe(
+        process.platform === 'darwin'
+          ? '/opt/homebrew/opt/mihomomo/bin/mihomomo'
+          : '/usr/bin/mihomomo'
+      )
     }
   })
 })

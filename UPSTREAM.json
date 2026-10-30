@@ -2,5 +2,7 @@
   "repository": "https://github.com/mihomo-party-org/clash-party.git",
   "branch": "smart_core",
   "commit": "33f54c9f076d1f1af45c0fa37e6b8dff32a6b3fa",
+  "version": "2.0.4",
+  "versionCommit": "ac294fed972c0c25c641abe603c3a6fe709dfdb3",
   "history": "snapshot baseline; subsequent updates are applied as patches"
 }

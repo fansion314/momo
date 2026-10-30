@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
-      - run: pacman -Syu --noconfirm base-devel git nodejs pnpm
+      - run: pacman -Syu --noconfirm base-devel git go nodejs pnpm
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.source_sha || github.sha }}
@@ -34,3 +34,37 @@ jobs:
           pnpm --package=vite-plus@1.4.0 dlx vp run typecheck
           pnpm --package=vite-plus@1.4.0 dlx vp run test
           CHECKS
+      - name: Verify helper security and race checks in the disposable container
+        working-directory: packaging/macos/helper
+        run: go test -race -count=1 ./...
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '26'
+          check-latest: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: packaging/macos/helper/go.mod
+          check-latest: true
+          cache: false
+      - run: npm install --global pnpm@11.8.0
+      - run: go test -race ./...
+        working-directory: packaging/macos/helper
+      - run: bash packaging/macos/test-network-ci.sh
+      - run: bash packaging/macos/build-ci.sh
+      - name: Exercise the privileged service with the released core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash packaging/macos/test-service-ci.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: clash-momo-macos
+          path: dist/release/*
+          if-no-files-found: error

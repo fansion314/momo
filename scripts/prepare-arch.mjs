@@ -3,11 +3,24 @@ import { createHash } from 'node:crypto'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 
+const platform = process.env.MOMO_RESOURCE_PLATFORM || `${process.platform}-${process.arch}`
+const nativeAssets = {
+  'linux-x64': [
+    'sysproxy.linux-x64-gnu.node',
+    '665048e01326bb71cc2059223cb107057ab744f09674cc711193e10eaf416f18'
+  ],
+  'darwin-arm64': [
+    'sysproxy.darwin-arm64.node',
+    'f379d2a153d81d8710707c861b0c62ff015953dda357979a94169f0a1b793e60'
+  ]
+}
+const nativeAsset = nativeAssets[platform]
+if (!nativeAsset) throw new Error(`Unsupported resource platform: ${platform}`)
 const assets = [
   [
-    'extra/sidecar/sysproxy.linux-x64-gnu.node',
-    'https://github.com/mihomo-party-org/sysproxy-rs-opti/releases/download/v0.1.3/sysproxy.linux-x64-gnu.node',
-    '665048e01326bb71cc2059223cb107057ab744f09674cc711193e10eaf416f18'
+    `extra/sidecar/${nativeAsset[0]}`,
+    `https://github.com/mihomo-party-org/sysproxy-rs-opti/releases/download/v0.1.3/${nativeAsset[0]}`,
+    nativeAsset[1]
   ],
   [
     'extra/files/sub-store.bundle.cjs',
@@ -28,28 +41,28 @@ const assets = [
     [
       'country.mmdb',
       'country-lite.mmdb',
-      '2a89256bba8c292abe1fc8b8e04d92a4aac6f5aa948284db5da2aff85e7543f3'
+      'c8bc4d9a28f82db05c1bd1c8baa79caf067e812a70a34820027a81cb334f3e33'
     ],
     [
       'geoip.metadb',
       'geoip.metadb',
-      '63d7fa98f4ad57ee42e266836364f12d06fe124887f864937c7128bc4a0ad903'
+      'd49315d3fce861e014d6fda9aaca6d83a5b20e6f682f0bcee71a41afad047673'
     ],
     [
       'geosite.dat',
       'geosite.dat',
-      'ba8968847bfb82a4f9b0c33da77b6d95f4f8fe1d7d3bb241a7ebac6c23b71631'
+      'b4d3807aa45b4f5532ae236672f244a562452622483c0b489c63dd2aadaa821f'
     ],
-    ['geoip.dat', 'geoip.dat', 'a6271d3c96361d96156e6d3f7cf1550ef21b00d2f951deb772f464db91e89ac5'],
+    ['geoip.dat', 'geoip.dat', 'fbf747a085be25eb61ecac8c27140b4ab0bf8181af6fdb104caa325bd93cf117'],
     [
       'ASN.mmdb',
       'GeoLite2-ASN.mmdb',
-      '4f480469576dba3e84b1f5c17313059982b70a62b8d35fb1ed225e39109b0531'
+      '3169b9ea7dad762f6837b95408dadc1173f47be33be2d83b6c90e67a57a7eb2e'
     ],
     [
       'BundleMRS.7z',
       'BundleMRS.7z',
-      'eecd792bdec6f7c0fa35dca3f2f78a63b444c68af4b79ebf08c2cce64ee3164b'
+      '9f566c14d4953f702ddda484a5052221c2c52ddaff494818c0b0556010f5e318'
     ]
   ].map(([file, name, hash]) => [
     `extra/files/${file}`,

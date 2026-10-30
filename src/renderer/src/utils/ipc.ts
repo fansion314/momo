@@ -1,4 +1,5 @@
 import { TitleBarOverlayOptions } from 'electron'
+import type { MacServiceStatus } from '../../../shared/macos-service'
 import type { IPInfo, IPProvider } from '../../../shared/network-info'
 import type { MediaUnlockItem, MediaUnlockName } from '../../../shared/media-unlock'
 import type { MainWindowState } from '../../../shared/window'
@@ -23,6 +24,10 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 
 // IPC API 类型定义
 interface IpcApi {
+  macServiceStatus: () => Promise<MacServiceStatus>
+  macServiceLogs: () => Promise<string>
+  installMacService: () => Promise<void>
+  uninstallMacService: () => Promise<void>
   // Mihomo API
   mihomoVersion: () => Promise<IMihomoVersion>
   mihomoCloseConnection: (id: string) => Promise<void>
@@ -287,6 +292,10 @@ const ipc = new Proxy({} as IpcApi, {
 
 // 导出所有 IPC 方法
 export const {
+  macServiceStatus,
+  macServiceLogs,
+  installMacService,
+  uninstallMacService,
   // Mihomo API
   mihomoVersion,
   mihomoCloseConnection,

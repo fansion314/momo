@@ -8,8 +8,8 @@ cp "$root"/packaging/arch/{PKGBUILD,clash-momo,clash-momo.desktop} /tmp/recipe/
 cd /tmp/recipe
 sed -i "s/@COMMIT@/$commit/" PKGBUILD
 sed -i "s/@LAUNCHER_SHA@/$(sha256sum clash-momo | cut -d' ' -f1)/;s/@DESKTOP_SHA@/$(sha256sum clash-momo.desktop | cut -d' ' -f1)/" PKGBUILD
-curl -fL -o /tmp/mihomomo.pkg.tar.zst https://github.com/fansion314/momo/releases/download/mihomomo-v0.1.0-2/mihomomo-0.1.0-2-x86_64.pkg.tar.zst
-curl -fL -o /tmp/mihomomo.pkg.tar.zst.sig https://github.com/fansion314/momo/releases/download/mihomomo-v0.1.0-2/mihomomo-0.1.0-2-x86_64.pkg.tar.zst.sig
+curl -fL -o /tmp/mihomomo.pkg.tar.zst https://github.com/fansion314/momo/releases/download/mihomomo-v1.19.33-1/mihomomo-1.19.33-1-x86_64.pkg.tar.zst
+curl -fL -o /tmp/mihomomo.pkg.tar.zst.sig https://github.com/fansion314/momo/releases/download/mihomomo-v1.19.33-1/mihomomo-1.19.33-1-x86_64.pkg.tar.zst.sig
 curl -fL -o /tmp/fansionia.asc https://raw.githubusercontent.com/fansion314/packages/main/arch/keys/fansionia.asc
 mkdir -m 700 /tmp/momo-gnupg
 GNUPGHOME=/tmp/momo-gnupg gpg --batch --import /tmp/fansionia.asc

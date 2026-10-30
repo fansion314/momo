@@ -59,6 +59,18 @@ import {
   verifyProcessOwner
 } from './process'
 import { setPublicDNS, recoverDNS } from './dns'
+import {
+  connectMacService,
+  isMacServiceActive,
+  macServiceRequest,
+  macServiceStatus,
+  stopMacServiceCore,
+  setMacServiceTransition,
+  validateMacCore,
+  expectMacServiceCore,
+  restoreMacServiceNetwork
+} from './macos-service'
+import { createMacCoreSnapshot } from './macos-snapshot'
 
 // 重新导出权限相关函数
 export {
@@ -97,6 +109,7 @@ interface CoreProcessWatchdog {
 }
 
 let child: ChildProcess | null = null
+let managedCoreRunning = false
 let coreProcessWatchdog: CoreProcessWatchdog | null = null
 let isRestarting = false
 let coreOperationPhase: 'initializing' | 'ready' | 'blocked' | 'shutting-down' = 'ready'
@@ -125,7 +138,10 @@ interface CoreHookWaiter {
 }
 
 export function hasCoreProcess(): boolean {
-  return Boolean(child && !child.killed && child.exitCode === null && child.signalCode === null)
+  return (
+    managedCoreRunning ||
+    Boolean(child && !child.killed && child.exitCode === null && child.signalCode === null)
+  )
 }
 
 export function beginCoreInitialization(): void {
@@ -434,6 +450,10 @@ function buildCoreEnv(safePath?: string, ageSecretKey?: string): NodeJS.ProcessE
 // 准备核心配置
 async function prepareCore(detached: boolean, skipStop = false): Promise<CoreConfig> {
   await ensureRuntimeFiles()
+  if (process.platform === 'darwin') {
+    await validateMacCore()
+    await connectMacService()
+  }
 
   const [appConfig, mihomoConfig] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
 
@@ -492,7 +512,9 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   const startupMode: CoreStartupMode = coreStartupMode === 'post-up' ? 'post-up' : 'log'
   const startupHook =
-    !detached && startupMode === 'post-up' ? await createCoreStartupHook() : undefined
+    !isMacServiceActive() && !detached && startupMode === 'post-up'
+      ? await createCoreStartupHook()
+      : undefined
 
   return {
     corePath: mihomoCorePath(core),
@@ -781,6 +803,42 @@ async function startCoreInternal(detached = false, skipStop = false): Promise<Co
   ensureNotShuttingDown()
   const config = await prepareCore(detached, skipStop)
   ensureNotShuttingDown()
+  if (isMacServiceActive()) {
+    const status = await macServiceStatus()
+    if (!status.workDir) throw new Error('macOS service did not provide a protected work directory')
+    const snapshot = await createMacCoreSnapshot(
+      mihomoWorkDir(),
+      path.join(config.workDir, 'config.yaml'),
+      status.workDir,
+      config.ageSecretKey,
+      status.dataMigrated
+    )
+    await macServiceRequest('/v1/core/start', snapshot, 60000)
+    managedCoreRunning = true
+    expectMacServiceCore(true)
+    await getAxios(true)
+    const readiness = (async (): Promise<Promise<void>[]> => {
+      await waitForCoreReady()
+      await Promise.all([
+        startMihomoTraffic(),
+        startMihomoConnections(),
+        startMihomoLogs(),
+        startMihomoMemory()
+      ])
+      await syncControlDnsAfterApply(config.dnsGuard)
+      await restoreMacServiceNetwork()
+      try {
+        await uploadRuntimeConfigIfChanged()
+      } catch (error) {
+        managerLogger.warn('Failed to sync runtime config to Gist', error)
+      }
+      mainWindow?.webContents.send('groupsUpdated')
+      mainWindow?.webContents.send('rulesUpdated')
+      // The main startup flow attaches profile-updater initialization to the first completion.
+      return [Promise.resolve()]
+    })()
+    return { readiness }
+  }
   const hookWaiter = config.startupHook ? createCoreHookWaiter(config.startupHook) : undefined
   const proc = spawnCoreProcess(config)
   hookWaiter?.attachProcess(proc)
@@ -847,6 +905,10 @@ export function startCoreForStartup(): Promise<Promise<void>[]> {
 }
 
 async function stopCoreInternal(force = false, cancelStartup = true): Promise<void> {
+  if (isMacServiceActive()) {
+    await stopMacServiceCore()
+    managedCoreRunning = false
+  }
   if (!force && process.platform === 'darwin') {
     try {
       await recoverDNS()
@@ -864,6 +926,8 @@ async function stopCoreInternal(force = false, cancelStartup = true): Promise<vo
       `Core PID ${stoppedChild?.pid ?? 'unknown'} refused to exit within ${coreShutdownTimeout}ms`,
       error
     )
+    // Migration must never start a second writer while the ordinary macOS core is alive.
+    if (process.platform === 'darwin') throw error
   }
 
   await cleanupStoppedCoreResources()
@@ -923,6 +987,10 @@ export async function stopCore(force = false): Promise<void> {
 export async function stopCoreForExit(): Promise<void> {
   coreOperationPhase = 'shutting-down'
   cancelAutomaticRestart()
+  if (isMacServiceActive()) {
+    await stopMacServiceCore(true)
+    managedCoreRunning = false
+  }
   const stoppedChild = stopCoreProcessAndStreams(true, true)
   await Promise.allSettled([
     recoverDNS({ force: true, timeout: 750 }),
@@ -933,6 +1001,9 @@ export async function stopCoreForExit(): Promise<void> {
 }
 
 setStopCoreBeforeAdminRestart(stopCore)
+setMacServiceTransition(async () => {
+  await restartCore()
+})
 
 async function ensureCoreProcessExited(proc: ChildProcess | null): Promise<void> {
   if (!proc) return

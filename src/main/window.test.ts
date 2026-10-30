@@ -110,6 +110,13 @@ vi.mock('./utils/logger', () => ({
 vi.mock('./utils/safeFile', () => ({ atomicWriteFileSync: vi.fn() }))
 
 beforeEach(() => {
+  // This suite exercises Linux window controls and native X11/Wayland behavior.
+  vi.stubGlobal(
+    'process',
+    new Proxy(process, {
+      get: (target, key) => (key === 'platform' ? 'linux' : Reflect.get(target, key))
+    })
+  )
   vi.resetModules()
   mocks.config = { silentStart: false, zoomFactor: 1.25, autoQuitWithoutCore: false } as IAppConfig
   mocks.getConfig.mockReset().mockImplementation(async () => mocks.config)
@@ -124,7 +131,10 @@ beforeEach(() => {
   mocks.ozonePlatform = 'x11'
 })
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+})
 
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 12; ++i) await Promise.resolve()

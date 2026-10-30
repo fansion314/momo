@@ -8,6 +8,7 @@ import { managerLogger } from '../utils/logger'
 import { checkAutoRun, enableAutoRun } from '../sys/autoRun'
 import i18next from '../../shared/i18n'
 import { checkAdminPrivileges } from './admin'
+import { ensureMacService, macServiceStatus } from './macos-service'
 
 const execPromise = promisify(exec)
 const execFilePromise = promisify(execFile)
@@ -28,7 +29,7 @@ export function isValidCoreName(core: string): core is AllowedCore {
 }
 
 export function validateCorePath(corePath: string): void {
-  if (corePath !== '/usr/bin/mihomomo') {
+  if (corePath !== mihomoCorePath()) {
     throw new Error('Invalid core path: only /usr/bin/mihomomo is supported')
   }
 }
@@ -70,6 +71,7 @@ export function getSessionAdminStatus(): boolean {
 export { checkAdminPrivileges } from './admin'
 
 export async function checkMihomoCorePermissions(): Promise<boolean> {
+  if (process.platform === 'darwin') return (await macServiceStatus()).compatible
   try {
     const { stdout } = await execFilePromise('/usr/bin/getcap', [mihomoCorePath()], {
       timeout: 3000
@@ -223,6 +225,7 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
 
 // File ownership and capabilities belong to pacman, never the Electron runtime.
 export async function grantTunPermissions(): Promise<void> {
+  if (process.platform === 'darwin') return ensureMacService()
   if (await checkMihomoCorePermissions()) return
   throw new Error(KERNEL_PERMISSIONS_MESSAGE)
 }

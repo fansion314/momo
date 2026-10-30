@@ -65,15 +65,16 @@ async function getName(bundle: string): Promise<string> {
 export async function getMacAppInfo(bundle: string): Promise<IAppInfo> {
   const stat = await fs.stat(bundle).catch(() => undefined)
   if (!stat?.isDirectory()) return { name: '', icon: '' }
-  const binary = app.isPackaged
-    ? path.join(
-        process.resourcesPath,
-        'app.asar.unpacked',
-        'node_modules',
-        'file-icon',
-        'file-icon'
-      )
-    : path.join(app.getAppPath(), 'node_modules', 'file-icon', 'file-icon')
+  const binary =
+    app.isPackaged && app.getAppPath().endsWith('.asar')
+      ? path.join(
+          process.resourcesPath,
+          'app.asar.unpacked',
+          'node_modules',
+          'file-icon',
+          'file-icon'
+        )
+      : path.join(app.getAppPath(), 'node_modules', 'file-icon', 'file-icon')
   const [name, icon] = await Promise.all([
     getName(bundle),
     new Promise<string>((resolve) => {

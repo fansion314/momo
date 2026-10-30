@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   checkMihomoCorePermissions,
   grantTunPermissions,
@@ -22,8 +22,16 @@ vi.mock('../../shared/i18n', () => ({ default: { t: (key: string) => key } }))
 vi.mock('./admin', () => ({ checkAdminPrivileges: vi.fn() }))
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'process',
+    new Proxy(process, {
+      get: (target, key) => (key === 'platform' ? 'linux' : Reflect.get(target, key))
+    })
+  )
   execFile.mockReset()
 })
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('system kernel capabilities', () => {
   it('requires effective and permitted capabilities on the exact installed binary', () => {
