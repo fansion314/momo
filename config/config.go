@@ -27,6 +27,7 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/smart/lightgbm"
 	"github.com/metacubex/mihomo/component/sniffer"
+	"github.com/metacubex/mihomo/component/tizi"
 	"github.com/metacubex/mihomo/component/traffic_history"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
@@ -219,6 +220,7 @@ type Config struct {
 	Sniffer       *sniffer.Config
 	TLS           *TLS
 
+	TiziStateDir   string
 	TrafficHistory traffic_history.Config
 }
 
@@ -412,6 +414,7 @@ type RawTLS struct {
 }
 
 type RawConfig struct {
+	TiziStateDir                  string                  `yaml:"-" json:"-"`
 	TrafficHistory                traffic_history.Config  `yaml:"traffic-history" json:"traffic-history"`
 	Port                          int                     `yaml:"port" json:"port"`
 	SocksPort                     int                     `yaml:"socks-port" json:"socks-port"`
@@ -492,7 +495,11 @@ func Parse(buf []byte) (*Config, error) {
 		return nil, err
 	}
 
-	return ParseRawConfig(rawCfg)
+	result, err := ParseRawConfig(rawCfg)
+	if err != nil && rawCfg.TiziStateDir != "" {
+		return nil, fmt.Errorf("managed tizi configuration is invalid")
+	}
+	return result, err
 }
 
 func DefaultRawConfig() *RawConfig {
@@ -625,6 +632,15 @@ func DefaultRawConfig() *RawConfig {
 }
 
 func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
+	// Expand authenticated managed configuration before normal parsing.
+	expanded, managedDir, expandErr := tizi.ExpandConfig(buf)
+	if expandErr != nil {
+		return nil, expandErr
+	}
+	if managedDir != "" && C.MomoManaged() && filepath.Clean(managedDir) != filepath.Join(filepath.Dir(C.Path.HomeDir()), "tizi") {
+		return nil, fmt.Errorf("managed tizi directory is outside the helper state root")
+	}
+	buf = expanded
 	// config with default value
 	rawCfg := DefaultRawConfig()
 
@@ -638,6 +654,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		return nil, err
 	}
 
+	rawCfg.TiziStateDir = managedDir
+	if managedDir != "" {
+		log.SetLevel(log.SILENT)
+	}
 	return rawCfg, nil
 }
 
@@ -657,7 +677,14 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		rawCfg.ExternalUIName = ""
 	}
 
-	config := &Config{}
+	if rawCfg.TiziStateDir != "" {
+		rawCfg.ExternalController = ""
+		rawCfg.ExternalControllerTLS = ""
+		rawCfg.ExternalUI = ""
+		rawCfg.ExternalUIURL = ""
+		rawCfg.ExternalControllerCors = RawCors{}
+	}
+	config := &Config{TiziStateDir: rawCfg.TiziStateDir}
 	if err := rawCfg.TrafficHistory.Validate(); err != nil {
 		return nil, err
 	}

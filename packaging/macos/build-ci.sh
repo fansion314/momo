@@ -7,9 +7,7 @@ revision=$(python3 -c 'import json;print(json.load(open("packaging/macos/release
 tag="mihomomo-v${pkgver}-${pkgrel}"
 stage="$PWD/.cache/macos-package"
 mkdir -p "$stage/bin" "$stage/share/mihomomo" dist/release
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -tags with_gvisor \
-  -ldflags "-s -w -X github.com/metacubex/mihomo/constant.Version=$pkgver" \
-  -o "$stage/bin/mihomomo" .
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 bash packaging/build-core.sh "$stage/bin/mihomomo" "$pkgver"
 codesign --force --sign - --timestamp=none "$stage/bin/mihomomo"
 codesign --verify --strict "$stage/bin/mihomomo"
 test "$(lipo -archs "$stage/bin/mihomomo")" = arm64
@@ -17,6 +15,8 @@ test ! -u "$stage/bin/mihomomo"
 "$stage/bin/mihomomo" -v | grep -F "$pkgver"
 "$stage/bin/mihomomo" --momo-capabilities | python3 -c \
   'import json,sys;v=json.load(sys.stdin);assert v["protocol"]==1 and v["managedMode"] and v["version"]==sys.argv[1]' "$pkgver"
+"$stage/bin/mihomomo" tizi --state-dir "$stage/tizi-capability-check" status <<<'{}' | python3 -c \
+  'import json,os,sys;v=json.load(sys.stdin);assert v["ok"] and v["data"]["supported"];assert not os.environ.get("TIZI_BUILD_KEYS") or v["data"]["keyReady"]'
 python3 - "$stage" "$pkgver" "$tag" "$revision" <<'PY'
 import hashlib,json,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1])

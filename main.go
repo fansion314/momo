@@ -20,6 +20,7 @@ import (
 	"github.com/metacubex/mihomo/component/age"
 	"github.com/metacubex/mihomo/component/generator"
 	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/tizi"
 	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
@@ -83,6 +84,10 @@ func init() {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "tizi" {
+		tizi.Main(os.Args[2:])
+		return
+	}
 	if momoCapabilities {
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
 			Protocol    int    `json:"protocol"`

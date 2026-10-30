@@ -8,6 +8,7 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/tizi"
 	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
@@ -331,11 +332,24 @@ func pointerOrDefaultTuicServer(p *tuicServerSchema, def LC.TuicServer) LC.TuicS
 	return def
 }
 
+func managedPatchAllowed(general *configSchema, managed bool) bool {
+	if !managed {
+		return true
+	}
+	return (general.LogLevel == nil || *general.LogLevel == log.SILENT) && general.ShadowSocksConfig == nil && general.VmessConfig == nil && general.TcptunConfig == nil && general.TuicServer == nil
+}
+
 func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	general := &configSchema{}
 	if err := render.DecodeJSON(r.Body, &general); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+
+	if !managedPatchAllowed(general, tizi.Active()) {
+		render.Status(r, http.StatusForbidden)
+		render.JSON(w, r, newError("Managed tizi configuration forbids logging and server listener changes"))
 		return
 	}
 

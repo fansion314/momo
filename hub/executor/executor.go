@@ -27,6 +27,7 @@ import (
 	"github.com/metacubex/mihomo/component/resource"
 	"github.com/metacubex/mihomo/component/smart/lightgbm"
 	"github.com/metacubex/mihomo/component/sniffer"
+	"github.com/metacubex/mihomo/component/tizi"
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
@@ -89,14 +90,22 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
+	tunnel.OnSuspend()
+	outbounds := map[string]bool{}
+	for name, p := range cfg.Proxies {
+		outbounds[name] = p.Type() >= C.Shadowsocks
+	}
+	if err := tizi.Configure(cfg.TiziStateDir, outbounds); err != nil {
+		listener.Cleanup()
+		log.Errorln("[Tizi] managed accounting initialization failed")
+		return
+	}
 	log.SetLevel(cfg.General.LogLevel)
 	// Initialize recording before listeners can accept their first connection.
 	// On reload, database initialization happens while the old tunnel is still running.
 	if err := statistic.DefaultManager.History().Configure(cfg.TrafficHistory, statistic.DefaultManager); err != nil {
 		log.Warnln("[TrafficHistory] configuration failed: %s", err)
 	}
-
-	tunnel.OnSuspend()
 
 	ca.ResetCertificate()
 	for _, c := range cfg.TLS.CustomTrustCert {
@@ -560,6 +569,7 @@ func closeSmart() {
 }
 
 func Shutdown() {
+	tizi.Close()
 	listener.Cleanup()
 	if err := statistic.DefaultManager.History().Close(); err != nil {
 		log.Warnln("[TrafficHistory] %s", err)

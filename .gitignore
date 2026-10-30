@@ -31,3 +31,6 @@ test/config/cache*
 /.cache/
 /dist/
 __pycache__/
+
+# Private build-only initializer; removed by packaging/build-core.sh
+/component/tizi/zz_build_keys_generated.go

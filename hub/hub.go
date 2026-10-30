@@ -59,6 +59,15 @@ func ApplyConfig(cfg *config.Config) {
 }
 
 func applyRoute(cfg *config.Config) {
+	if cfg.TiziStateDir != "" {
+		cfg.Controller.ExternalController = ""
+		cfg.Controller.ExternalControllerTLS = ""
+		cfg.Controller.ExternalUI = ""
+		cfg.Controller.ExternalUIURL = ""
+		cfg.Controller.ExternalUIName = ""
+		cfg.Controller.ExternalDohServer = ""
+		cfg.Controller.Cors = config.Cors{}
+	}
 	if C.MomoManaged() {
 		cfg.Controller.ExternalController = ""
 		cfg.Controller.ExternalControllerTLS = ""
