@@ -10,7 +10,7 @@ node node_modules/electron/install.js
 node scripts/prepare.mjs
 pnpm --package=vite-plus@1.4.0 dlx vp run build:macos
 app="$root/dist/macos/Clash Momo.app"
-electron="$app/Contents/MacOS/Electron"
+electron="$app/Contents/MacOS/Clash Momo"
 test ! -e "$app/Contents/Resources/sidecar/mihomomo"
 test -x "$app/Contents/Resources/files/world.fansionia.clash-momo.helper"
 codesign --verify --deep --strict "$app"
