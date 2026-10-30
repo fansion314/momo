@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import plist from 'plist'
+import { parse, build } from 'plist'
 
 if (process.platform !== 'darwin' || process.arch !== 'arm64') {
   throw new Error('macOS packaging requires native Darwin ARM64')
@@ -54,7 +54,7 @@ run(
   }
 )
 const infoPath = path.join(contents, 'Info.plist')
-const info = plist.parse(await readFile(infoPath, 'utf8'))
+const info = parse(await readFile(infoPath, 'utf8'))
 Object.assign(info, {
   CFBundleIdentifier: 'world.fansionia.clash-momo',
   CFBundleName: 'Clash Momo',
@@ -74,6 +74,6 @@ Object.assign(info, {
   ]
 })
 delete info.ElectronAsarIntegrity
-await writeFile(infoPath, plist.build(info))
+await writeFile(infoPath, build(info))
 run('python3', ['packaging/macos/sign.py', app, path.join(root, 'build/entitlements.mac.plist')])
 console.log(app)
