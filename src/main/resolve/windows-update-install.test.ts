@@ -30,6 +30,8 @@ describe('Windows update elevation launcher', () => {
     expect(launcher).toContain('[IO.FileMode]::CreateNew')
     expect(launcher).toContain("Notify-UpdateCompletion 'installed'")
     expect(launcher).toContain("Notify-UpdateCompletion 'error'")
+    expect(launcher).toContain('$installer.WaitForExit(300000)')
+    expect(launcher).toContain('$installer.Kill()')
     expect(launcher.indexOf('ComputeHash')).toBeLessThan(launcher.indexOf('\'{"status":"ready"}\''))
     expect(launcher).not.toContain(executable)
     const payload = launcher.match(/FromBase64String\('([A-Za-z0-9+/=]+)'\)/)?.[1]
@@ -43,6 +45,7 @@ describe('Windows update elevation launcher', () => {
     const restarter = gunzipSync(Buffer.from(compressed[1]?.[1] || '', 'base64')).toString('utf8')
     expect(restarter).not.toContain('-Verb RunAs')
     expect(restarter).toContain("$result.status -ne 'installed'")
+    expect(restarter).toContain('$wait.AsyncWaitHandle.WaitOne(480000)')
     expect(restarter).toContain('Start-Process -FilePath $payload.application')
     expect(request.indexOf("$receipt.status -ne 'ready'")).toBeLessThan(
       request.indexOf('$waiter = Start-Process')

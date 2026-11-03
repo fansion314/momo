@@ -33,6 +33,7 @@ brew install --cask fansion314/packages/clash-momo
 
 - 尚未安装服务时可以使用普通用户代理内核；首次启用 TUN、系统代理或 DNS 修改时安装独立网络服务，并由 macOS 弹出管理员认证。取消认证会保留普通模式。
 - 「设置 → 内核」显示服务状态，提供安装／更新、卸载及服务日志。升级应用或 Homebrew 内核后，如果文件摘要或协议不匹配，需要重新授权更新服务；不会自动把用户可写的可执行文件作为 root 运行。管理员授权时，安装器将固定 Formula 内核与 helper 复制到受保护目录。
+- 网络服务 helper 使用 Rust 实现，保持 Protocol 1 和既有安装、数据库与网络恢复记录兼容；使用有界流式快照、受保护目录文件描述符和原生 SystemConfiguration，并在快照提交失败时一起恢复运行态与磁盘数据。
 - 服务身份为 `world.fansionia.clash-momo`，通过受权限保护的 Unix socket 与主进程通信。主进程每 2 秒续约；失联超过 10 秒，服务停止内核并恢复原来的系统代理和 DNS。正常退出也会执行停止和恢复；轻量模式保留主进程及续约。
 - 服务运行数据位于 `/Library/Application Support/world.fansionia.clash-momo/data`。首次接管先确认普通内核退出，再导入配置、资源和流量历史，避免两个内核写同一数据库。配置快照只读取有界的普通文件，拒绝符号链接；系统服务不会执行配置里的启动／退出 shell 钩子，也不开放公共控制器。
 - 卸载服务前会停止内核，将流量历史和缓存恢复到用户工作目录，恢复网络设置，然后回到普通模式并关闭 TUN／系统代理。服务目录保留以便恢复；删除 Cask 本身不会等同于清理服务，请先在应用中卸载服务。
@@ -41,11 +42,14 @@ macOS 归档构建、安装授权、TUN 路由、系统代理／DNS 恢复和休
 
 ## Windows 安装与便携版
 
-从 [Releases](https://github.com/fansion314/momo/releases) 下载 Windows x64 安装包或便携 ZIP。两种客户端都包含精确配套的 `mihomomo.exe`，无需另装内核；Windows 产物仅通过 GitHub Release 提供，不接入 Fansionia 软件包仓库。此版本不支持 Windows 7/8、32 位或 ARM64。
+从 [Releases](https://github.com/fansion314/momo/releases) 下载 Windows x64 安装包或便携 ZIP。两种客户端都包含精确配套的 `mihomomo.exe`，无需另装内核；Windows 原始产物发布于 GitHub Release，并由 packages 同步原字节至 CNB 更新镜像；不新增 Windows 软件包管理渠道。此版本不支持 Windows 7/8、32 位或 ARM64。
 
 - NSIS 安装向导支持选择安装目录，默认安装到系统程序目录；配置、订阅和流量历史保存在 `%APPDATA%\clash-momo`。升级以及默认卸载会保留数据，只有主动选择删除用户数据时才清除。
 - 便携 ZIP 解压后直接运行，归档中的 `PORTABLE` 标记使数据保存在程序旁的 `data` 目录；迁移时复制整个目录。请选择可写的本地目录，流量历史数据库不支持 UNC 网络路径。
 - 普通代理无需管理员权限；首次启用 TUN 按上游 Clash Party 方式通过 UAC 重启客户端，内核继承管理员权限。取消 UAC 会保留当前客户端和普通代理，不安装后台服务。
+- 安装版支持应用内更新，默认使用 CNB 镜像，可在设置中切换 GitHub Release。默认启动后及每 24 小时检查，仅提示；下载和安装分别确认。安装结束后以原调用者权限重新启动客户端。
+- 便携版可检查更新并下载 ZIP，退出后手动替换程序文件，保留 `PORTABLE` 和 `data`；不会自动覆盖便携目录。
+- 更新清单以 Ed25519 签名，客户端先验签，再核验下载文件的大小和 SHA-256。`2.0.4-4` 尚无应用内更新功能，首次需手动安装 `2.0.4-5`。
 - 当前 Windows 程序未配置 Authenticode 签名；Release 提供 SHA-256 校验文件。原生 CI 验证不等同于用户桌面上的 UAC 确认／取消交互验收，未实测的交互覆盖会在发布验收记录中明确列出。
 
 ## 2.0.4-4 功能回退
@@ -59,11 +63,12 @@ macOS 归档构建、安装授权、TUN 路由、系统代理／DNS 恢复和休
 - **轻量模式**释放主窗口和悬浮窗的渲染进程，同时保留应用主进程、托盘和正在运行的同一个内核；可通过托盘重新打开窗口。也可在设置中配置自动进入轻量模式。
 - **窗口缩放**可在设置中调整，范围为 50%–200%，步长为 1%。
 - **流量历史**由内核记录到本地 SQLite 数据库。客户端默认启用记录，原始连接与采样默认保留 30 天，可在流量页面调整；按日聚合长期保留，不受原始数据清理影响。日统计按首次初始化时固定的时区和采样观测时间归属，不能精确还原跨日流量；一次日粒度查询最多 366 个日历日。已有流量在启用前或记录间断期间不会补录。
+- 概览提供代理下载量、代理上传量和总代理流量，按所选时间范围及筛选条件统计最终出口不是 `DIRECT` 的流量；代理组最终选择 `DIRECT` 时不计入代理量。
 - 关闭本地记录会停止记录；此时历史查询 API 不可用（返回 HTTP 503），状态接口仍可访问。它不会将已有历史补齐或自动删除。记录队列满、磁盘错误或进程异常也可能造成缺失；状态接口提供相应信息。详情见 [内核流量历史文档](https://github.com/fansion314/momo/blob/mihomomo/docs/traffic-history.md)。
 
 ## 构建和发布维护
 
-源码和发布共用 `fansion314/momo`：客户端维护在 `clash-momo` 分支，内核维护在 `mihomomo` 分支。本次标签分别为 `clash-momo-v2.0.4-4` 和 `mihomomo-v1.19.33-4`；先发布内核。版本跟踪 Clash Party 稳定版及原版 Mihomo 稳定版，实际源码基线、智能内核来源链和准确提交记录在 `UPSTREAM.json`，保留已有改进；同版本修订递增打包号，macOS 修订单独记录。CI 收齐 Arch、macOS 与 Windows 产物并通过验证后统一发布不可变 Release。Arch 包验证安装、签名、内核能力和系统 Electron 原生模块；macOS 验证 ARM64 应用签名及专用服务。图形授权与实际网络行为另行验收。发布需要 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
+源码和发布共用 `fansion314/momo`：客户端维护在 `clash-momo` 分支，内核维护在 `mihomomo` 分支。本次客户端标签为 `clash-momo-v2.0.4-5`（macOS `r5`），继续使用已发布的 `mihomomo-v1.19.33-4`，不重复发布内核。版本跟踪 Clash Party 稳定版及原版 Mihomo 稳定版，实际源码基线、智能内核来源链和准确提交记录在 `UPSTREAM.json`，保留已有改进；同版本修订递增打包号，macOS 修订单独记录。CI 收齐 Arch、macOS 与 Windows 产物并通过验证后统一发布不可变 Release。Arch 包验证安装、签名、内核能力和系统 Electron 原生模块；macOS 验证 ARM64 应用签名及专用服务。图形授权与实际网络行为另行验收。Windows 更新清单发布还需要 `WINDOWS_UPDATE_SIGNING_KEY`，对应公钥固定在客户端与 packages 镜像源码中。发布需要 `ARCH_SIGNING_PRIVATE_KEY`、`ARCH_SIGNING_PASSPHRASE`、`ARCH_SIGNING_KEY_ID`，以及用于通知下游的 GitHub App `DISTRIBUTION_APP_ID` 和 `DISTRIBUTION_APP_PRIVATE_KEY`。已发布的标签和资产不可覆盖。
 
 源码配方位于 `packaging/arch`。`scripts/prepare-arch.mjs` 对资源进行校验；MetaCubeX 地理数据的上游 `latest` 资源被替换时，校验会失败，需审阅后更新固定摘要。
 

@@ -68,7 +68,7 @@ function Record-UpdateResult($value) {
 try {
   $completionPipe = New-Object IO.Pipes.NamedPipeServerStream($payload.completionPipeName, [IO.Pipes.PipeDirection]::In, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
   $wait = $completionPipe.BeginWaitForConnection($null, $null)
-  if (!$wait.AsyncWaitHandle.WaitOne(360000)) { throw 'Timed out waiting for the Windows installer to finish' }
+  if (!$wait.AsyncWaitHandle.WaitOne(480000)) { throw 'Timed out waiting for the Windows installer to finish' }
   $completionPipe.EndWaitForConnection($wait)
   $reader = New-Object IO.StreamReader($completionPipe)
   $line = $reader.ReadLineAsync()
@@ -135,7 +135,12 @@ try {
   if (Get-Process -Id ${parentPid} -ErrorAction SilentlyContinue) {
     Wait-Process -Id ${parentPid} -Timeout 60 -ErrorAction Stop
   }
-  $installer = Start-Process -FilePath $protected -ArgumentList $payload.arguments -Wait -PassThru -ErrorAction Stop
+  $installer = Start-Process -FilePath $protected -ArgumentList $payload.arguments -PassThru -ErrorAction Stop
+  if (!$installer.WaitForExit(300000)) {
+    $installer.Kill()
+    [void]$installer.WaitForExit(5000)
+    throw 'The Windows installer exceeded its five-minute deadline'
+  }
   if ($installer.ExitCode -ne 0) { throw ('Installer failed with code ' + $installer.ExitCode) }
   Notify-UpdateCompletion 'installed'
 } catch {
