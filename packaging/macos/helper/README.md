@@ -6,14 +6,14 @@ Electron application stays an ordinary user process. Developer ID signing is not
 required for this explicit administrator-authorized installation flow.
 
 The build resource is `files/world.fansionia.clash-momo.helper`. Build natively on
-macOS with cgo enabled (the Darwin adapter uses `getpeereid` and `libproc`):
+macOS using the pinned stable Rust toolchain, with the default sccache wrapper:
 
 ```sh
-go build -trimpath -o world.fansionia.clash-momo.helper .
+cargo build --release --locked
 ```
 
 Do not run an installation on a developer machine merely to build or test it.
-Linux `go test -race ./...` covers protocol, filesystem, journal and lifecycle
+Linux `cargo test --locked` covers protocol, filesystem, journal and lifecycle
 logic in the existing Arch development container. macOS disposable CI additionally
 builds/installs the actual service and verifies UID isolation and managed-core IPC.
 
@@ -99,18 +99,33 @@ the snapshot endpoint for full reload. Proxy targets are fixed to the managed Un
 socket, and unknown API routes are denied.
 
 Proxy hosts must be loopback and PAC URLs must be HTTP loopback IP URLs. DNS accepts
-literal IPs only. The helper enumerates enabled network services and persists the
-original values **before** each mutation. Because `networksetup` changes proxy
-content and enabled state in separate commands, the journal records all exact
-intermediate states before running either command. Restoration also journals its
-intermediates, verifies restored values, and retains failed entries for retry. A
-setting changed by another application is preserved and our claim is dropped.
-Authenticated system proxies are rejected because networksetup does not expose
-their credentials for exact restoration.
+literal IPs only. The helper uses scoped SystemConfiguration transactions without
+spawning `networksetup`. It journals original values **before** each mutation and
+rechecks expected state while holding the native preferences lock. Go-era journal
+intermediate states remain readable for interrupted-upgrade recovery. Restoration
+verifies restored values and retains failed entries for retry. A setting changed
+by another application is preserved and our claim is dropped. Authenticated system
+proxies remain unsupported because their credentials cannot be restored exactly.
 Originally absent PAC URLs and HTTP/HTTPS/SOCKS addresses are cleared through scoped
 SystemConfiguration transactions, removing only the selected service's fixed
 address fields and preserving enabled flags and unrelated proxy settings. They are
 never restored by passing guessed empty URL/host/port arguments to networksetup.
+
+## Rust resource and safety model
+
+The HTTP reactor uses one asynchronous thread, bounded connections, and independent
+lease authentication. Lifecycle work runs outside that reactor. There is no idle
+lease tick when no client session exists. Snapshot JSON and base64 are decoded into
+root-only staging through bounded buffers; the helper never materializes an entire
+resource archive in memory. Config text remains bounded to 16 MiB. State export and
+HTTP/WebSocket forwarding also stream with backpressure. Persistent logs reuse one
+bounded file descriptor. Every protected lookup and replacement is anchored to
+validated directory descriptors using `openat`, `O_NOFOLLOW`, and `renameat`.
+
+The implementation version is 2 while the public wire protocol remains 1. Existing
+Go installation metadata, process identities, network journals, import digests and
+managed databases remain compatible. CI builds the fixed previously released Go
+helper only as an upgrade and performance fixture; it is not shipped in the app.
 
 ## Deliberate trust boundary
 

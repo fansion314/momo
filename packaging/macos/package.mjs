@@ -76,20 +76,12 @@ await cp('extra/files', path.join(resources, 'files'), { recursive: true })
 await cp('extra/sidecar', path.join(resources, 'sidecar'), { recursive: true })
 await cp('build/icon.icns', path.join(resources, 'clash-momo.icns'))
 await mkdir(path.join(resources, 'files'), { recursive: true })
-run(
-  'go',
-  [
-    'build',
-    '-buildvcs=false',
-    '-trimpath',
-    '-ldflags=-s -w',
-    '-o',
-    path.join(resources, 'files/world.fansionia.clash-momo.helper'),
-    '.'
-  ],
-  {
-    cwd: path.join(root, 'packaging/macos/helper')
-  }
+run('cargo', ['build', '--release', '--locked'], {
+  cwd: path.join(root, 'packaging/macos/helper')
+})
+await cp(
+  path.join(root, 'packaging/macos/helper/target/release/clash-momo-helper'),
+  path.join(resources, 'files/world.fansionia.clash-momo.helper')
 )
 const infoPath = path.join(contents, 'Info.plist')
 const info = parse(await readFile(infoPath, 'utf8'))

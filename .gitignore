@@ -16,3 +16,4 @@ tsconfig.node.tsbuildinfo
 /.cache/
 /.vite/
 __pycache__/
+/packaging/macos/helper/target/

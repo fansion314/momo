@@ -25,6 +25,23 @@ gh release download "$tag" -R fansion314/momo -p "$archive" -p "$archive.sha256"
 (cd "$stage" && shasum -a 256 -c "$archive.sha256")
 tar -xzf "$stage/$archive" -C "$stage"
 helper="$PWD/dist/macos/Clash Momo.app/Contents/Resources/files/world.fansionia.clash-momo.helper"
+mkdir -p dist/validation
+# Build the immutable previously released Go service solely as an upgrade fixture.
+git archive f769c662e7d86f7bc5de10574f0577ab3e719b4f packaging/macos/helper | tar -x -C "$stage"
+(cd "$stage/packaging/macos/helper" && go build -trimpath -o "$stage/go-helper" .)
+sudo "$stage/go-helper" install --uid "$(id -u)" --core "$stage/bin/mihomomo"
+python3 packaging/macos/benchmark-helper.py go "$stage/benchmark-go.json"
+cp "$stage/benchmark-go.json" dist/validation/
+python3 packaging/macos/test-service-ci.py
+sudo /usr/bin/python3 - <<'PY'
+import sqlite3
+from pathlib import Path
+database = Path('/Library/Application Support/world.fansionia.clash-momo/data/traffic-history.db')
+assert database.is_file(), 'Go managed core did not create the history database'
+with sqlite3.connect(database) as connection:
+    connection.execute('CREATE TABLE IF NOT EXISTS momo_upgrade_fixture (id INTEGER PRIMARY KEY, value TEXT NOT NULL)')
+    connection.execute("INSERT OR REPLACE INTO momo_upgrade_fixture VALUES (1, 'preserve Go helper history across Rust upgrade')")
+PY
 # Reproduce the legacy-service upgrade path. The old helper chowned its socket to the
 # application UID, while its containing directories remained root-owned.
 legacy_root='/Library/Application Support/world.fansionia.clash-momo'
@@ -42,7 +59,19 @@ PY
 sudo chown "$(id -u):$(id -gn)" "$legacy_socket"
 sudo "$helper" install --uid "$(id -u)" --core "$stage/bin/mihomomo"
 sudo test ! -e "$legacy_socket"
+sudo /usr/bin/python3 - <<'PY'
+import sqlite3
+with sqlite3.connect('/Library/Application Support/world.fansionia.clash-momo/data/traffic-history.db') as connection:
+    assert connection.execute('SELECT value FROM momo_upgrade_fixture WHERE id=1').fetchone() == ('preserve Go helper history across Rust upgrade',)
+PY
+python3 packaging/macos/benchmark-helper.py rust "$stage/benchmark-rust.json"
+cp "$stage/benchmark-rust.json" dist/validation/
 python3 packaging/macos/test-service-ci.py
 # Reinstall tests the same authorized transaction and protected state retention.
 sudo "$helper" install --uid "$(id -u)" --core "$stage/bin/mihomomo"
 python3 packaging/macos/test-service-ci.py
+sudo /usr/bin/python3 - <<'PY'
+import sqlite3
+with sqlite3.connect('/Library/Application Support/world.fansionia.clash-momo/data/traffic-history.db') as connection:
+    assert connection.execute('SELECT value FROM momo_upgrade_fixture WHERE id=1').fetchone() == ('preserve Go helper history across Rust upgrade',)
+PY
