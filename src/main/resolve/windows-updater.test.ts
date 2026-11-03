@@ -139,6 +139,24 @@ afterEach(async () => {
 })
 
 describe('Windows update coordination', () => {
+  it('does not abort an early manual download when initial scheduler configuration matches', async () => {
+    mocks.config = { windowsAutoCheckUpdate: false, windowsUpdateSource: 'github' }
+    await updater.checkWindowsUpdate()
+    let confirm: ((value: { response: number }) => void) | undefined
+    mocks.dialog.mockImplementationOnce(
+      () =>
+        new Promise<{ response: number }>((resolve) => {
+          confirm = resolve
+        })
+    )
+    const downloading = updater.downloadWindowsUpdate()
+    await vi.waitFor(() => expect(confirm).toBeTypeOf('function'))
+    updater.initWindowsUpdater()
+    confirm?.({ response: 1 })
+    await expect(downloading).resolves.toMatchObject({ phase: 'downloaded', source: 'github' })
+    expect(mocks.download).toHaveBeenCalledTimes(1)
+  })
+
   it('uses a direct CNB connection and refreshes connections when GitHub uses the system proxy', async () => {
     updater.initWindowsUpdater()
     mocks.findUpdate.mockImplementation(

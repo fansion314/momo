@@ -286,11 +286,19 @@ export function initWindowsUpdater(): void {
   disposeConfig = subscribeAppConfig((config) => {
     const enabled = config.windowsAutoCheckUpdate !== false
     const source = windowsUpdateSource(config.windowsUpdateSource)
-    if (source !== previousSource) {
+    const firstConfig = previousSource === undefined
+    const sourceChanged = firstConfig
+      ? windowsUpdateState().phase !== 'idle' && windowsUpdateState().source !== source
+      : source !== previousSource
+    if (sourceChanged) {
       generation++
       abortController?.abort()
       downloaded = undefined
       publish({ source, phase: 'idle', update: undefined, progress: undefined, error: undefined })
+    } else if (firstConfig) {
+      // A manual check can finish before renderer startup initializes the
+      // scheduler. Hydrate its matching source without canceling that request.
+      publish({ source })
     }
     if (source !== previousSource || enabled !== previousEnabled) {
       if (timer) clearTimeout(timer)
