@@ -101,6 +101,31 @@ describe('Windows release discovery and downloads', () => {
     ).rejects.toThrow()
   })
 
+  it('accepts Electron fetch responses with an empty URL while retaining HTTPS input checks', async () => {
+    const fixture = signedUpdateFixture()
+    const electronResponse = async () => new Response(JSON.stringify(fixture.envelope))
+    expect(await fetchUpdateJson('https://cnb.cool/update', electronResponse)).toEqual(
+      fixture.envelope
+    )
+    await expect(fetchUpdateJson('http://insecure.test/update', electronResponse)).rejects.toThrow()
+    const dir = await mkdtemp(path.join(tmpdir(), 'windows-update-electron-'))
+    dirs.push(dir)
+    const bytes = Buffer.from('electron native fetch body')
+    const file = path.join(dir, 'setup.exe')
+    await downloadUpdateAsset(
+      'https://cnb.cool/setup.exe',
+      file,
+      {
+        name: 'setup.exe',
+        size: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      },
+      async () => new Response(bytes),
+      () => {}
+    )
+    expect(await readFile(file)).toEqual(bytes)
+  })
+
   it('streams and hashes the download, rechecks cache and removes corrupt partial files', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'windows-update-test-'))
     dirs.push(dir)

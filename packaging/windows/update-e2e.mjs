@@ -162,23 +162,40 @@ async function attachFixture(executable, sourceName = 'cnb') {
     timeout: 45000
   })
   const page = await application.firstWindow()
-  await application.evaluate(
-    ({ session, dialog }, { base, sourceName, savePath }) => {
+  const fetchProbe = await application.evaluate(
+    async ({ session, dialog }, { base, sourceName, savePath }) => {
       const updates = session.fromPartition('windows-updates', { cache: false })
       updates.setCertificateVerifyProc((request, callback) =>
         callback(request.hostname === '127.0.0.1' ? 0 : -3)
       )
-      updates.webRequest.onBeforeRequest(
-        {
-          urls: [
-            'https://cnb.cool/fansionia/packages/*',
-            'https://api.github.com/repos/fansion314/momo/releases*',
-            'https://github.com/fansion314/momo/releases/download/*'
-          ]
-        },
-        (request, callback) =>
-          callback({ redirectURL: `${base}/fixture?original=${encodeURIComponent(request.url)}` })
-      )
+      const urls = [
+        'https://cnb.cool/fansionia/packages/*',
+        'https://api.github.com/repos/fansion314/momo/releases*',
+        'https://github.com/fansion314/momo/releases/download/*'
+      ]
+      const fixtureRedirect = (request, callback) => {
+        const known =
+          request.url.startsWith('https://cnb.cool/fansionia/packages/') ||
+          request.url.startsWith('https://api.github.com/repos/fansion314/momo/releases') ||
+          request.url.startsWith('https://github.com/fansion314/momo/releases/download/')
+        callback(
+          known
+            ? { redirectURL: `${base}/fixture?original=${encodeURIComponent(request.url)}` }
+            : {}
+        )
+      }
+      const beforeRequest = updates.webRequest.onBeforeRequest.bind(updates.webRequest)
+      // Compose any lazily installed production HTTPS guard with the fixture
+      // redirect. Only this Playwright process can intercept fixed source URLs.
+      updates.webRequest.onBeforeRequest = (filter, listener) => {
+        beforeRequest(filter, (request, callback) => {
+          listener(request, (decision) => {
+            if (decision.cancel) callback(decision)
+            else fixtureRedirect(request, callback)
+          })
+        })
+      }
+      beforeRequest({ urls }, fixtureRedirect)
       globalThis.__momoUpdateConfirmation = 1
       globalThis.__momoUpdateDialogCalls = 0
       dialog.showMessageBox = async () => {
@@ -187,12 +204,26 @@ async function attachFixture(executable, sourceName = 'cnb') {
       }
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: savePath })
       globalThis.__momoUpdateSourceName = sourceName
+      const probe = await updates.fetch(
+        'https://cnb.cool/fansionia/packages/-/git/raw/windows-updates/clash-momo/windows-x64/latest.json'
+      )
+      const result = { status: probe.status, responseUrl: probe.url }
+      await probe.body?.cancel()
+      return result
     },
     {
       base: `https://127.0.0.1:${fixtureServer.address().port}`,
       sourceName,
       savePath: path.join(work, 'downloaded-portable.zip')
     }
+  )
+  assert.equal(fetchProbe.status, 200)
+  assert(
+    fetchProbe.responseUrl === '' || fetchProbe.responseUrl.startsWith('https://'),
+    `Unexpected native fetch URL: ${fetchProbe.responseUrl}`
+  )
+  evidence.tests.push(
+    `native Electron fetch response.url=${JSON.stringify(fetchProbe.responseUrl)}`
   )
   await waitFor(
     () => invoke(page, 'windowsUpdateState'),

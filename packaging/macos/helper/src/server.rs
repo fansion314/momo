@@ -81,6 +81,37 @@ fn json(value: serde_json::Value) -> HttpResponse {
 fn failure(status: StatusCode, message: &str) -> HttpResponse {
     response(status, message.to_owned())
 }
+
+async fn drain_small_request(incoming: &mut Incoming) -> bool {
+    const LIMIT: u64 = 65536;
+    if incoming.size_hint().upper().is_none_or(|size| size > LIMIT) {
+        return false;
+    }
+    // Small HTTP clients can send headers and the body in separate writes. An
+    // immediate rejection must not close their socket before that body arrives.
+    tokio::time::timeout(
+        Duration::from_millis(500),
+        http_body_util::Limited::new(incoming, LIMIT as usize).collect(),
+    )
+    .await
+    .is_ok_and(|result| result.is_ok())
+}
+
+async fn rejected(
+    mut request: Request<Incoming>,
+    status: StatusCode,
+    message: &str,
+) -> HttpResponse {
+    let drained = drain_small_request(request.body_mut()).await;
+    let mut response = failure(status, message);
+    if !drained {
+        response.headers_mut().insert(
+            hyper::header::CONNECTION,
+            hyper::header::HeaderValue::from_static("close"),
+        );
+    }
+    response
+}
 fn locked<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>> {
     mutex
         .lock()
@@ -157,9 +188,14 @@ impl Service {
             }
         }
     }
-    async fn handle(self: Arc<Self>, request: Request<Incoming>) -> HttpResponse {
+    async fn handle(self: Arc<Self>, mut request: Request<Incoming>) -> HttpResponse {
         if request.headers().contains_key("origin") {
-            return failure(StatusCode::FORBIDDEN, "browser origins are forbidden");
+            return rejected(
+                request,
+                StatusCode::FORBIDDEN,
+                "browser origins are forbidden",
+            )
+            .await;
         }
         let path = request.uri().path().to_owned();
         let method = request.method().as_str().to_owned();
@@ -169,6 +205,17 @@ impl Service {
             .and_then(|v| v.to_str().ok())
             .unwrap_or_default()
             .to_owned();
+        if method == "POST"
+            && (path == "/v1/session" || path == "/v1/lease")
+            && !drain_small_request(request.body_mut()).await
+        {
+            let mut response = failure(StatusCode::BAD_REQUEST, "invalid or oversized request");
+            response.headers_mut().insert(
+                hyper::header::CONNECTION,
+                hyper::header::HeaderValue::from_static("close"),
+            );
+            return response;
+        }
         if method == "POST" && path == "/v1/lease" {
             let Ok(mut session) = self.session.lock() else {
                 return failure(StatusCode::SERVICE_UNAVAILABLE, "service state unavailable");
@@ -231,25 +278,29 @@ impl Service {
         }
         let (generation, cancelled) = match self.authorized(&token) {
             Ok(auth) => auth,
-            Err(_) => return failure(StatusCode::UNAUTHORIZED, "session required"),
+            Err(_) => return rejected(request, StatusCode::UNAUTHORIZED, "session required").await,
         };
         if path.starts_with("/core/") {
             if !allowed_core_route(&method, path.strip_prefix("/core").unwrap_or_default()) {
-                return failure(StatusCode::FORBIDDEN, "operation forbidden");
+                return rejected(request, StatusCode::FORBIDDEN, "operation forbidden").await;
             }
             if !self.running.load(Ordering::Acquire) {
-                return failure(
+                return rejected(
+                    request,
                     StatusCode::SERVICE_UNAVAILABLE,
                     "managed core is not running",
-                );
+                )
+                .await;
             }
             let permit = match self.streams.clone().try_acquire_owned() {
                 Ok(permit) => permit,
                 Err(_) => {
-                    return failure(
+                    return rejected(
+                        request,
                         StatusCode::TOO_MANY_REQUESTS,
                         "too many active core streams",
-                    );
+                    )
+                    .await;
                 }
             };
             return match proxy(

@@ -120,6 +120,76 @@ impl Harness {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn rejected_small_requests_accept_split_header_and_body_writes() {
+    let Some(harness) = Harness::new().await else {
+        return;
+    };
+    let token = harness.session().await;
+    for (path, extra, expected) in [
+        ("/v1/core/start", String::new(), "401"),
+        (
+            "/core/restart",
+            format!("X-Momo-Session: {token}\r\n"),
+            "403",
+        ),
+        (
+            "/v1/session",
+            "Origin: http://evil.invalid\r\n".into(),
+            "403",
+        ),
+    ] {
+        let mut stream = UnixStream::connect(harness.root.path().join("test.sock"))
+            .await
+            .unwrap();
+        let header = format!(
+            "POST {path} HTTP/1.1\r\nHost: helper\r\n{extra}Content-Length: 2\r\nConnection: close\r\n\r\n"
+        );
+        stream.write_all(header.as_bytes()).await.unwrap();
+        let mut byte = [0u8; 1];
+        assert!(
+            tokio::time::timeout(Duration::from_millis(30), stream.read(&mut byte))
+                .await
+                .is_err()
+        );
+        stream.write_all(b"{}").await.unwrap();
+        let mut response = Vec::new();
+        tokio::time::timeout(Duration::from_secs(2), stream.read_to_end(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            String::from_utf8(response)
+                .unwrap()
+                .starts_with(&format!("HTTP/1.1 {expected}"))
+        );
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn rejected_slow_or_large_bodies_do_not_hold_connections_open() {
+    let Some(harness) = Harness::new().await else {
+        return;
+    };
+    for length in [2, 65537] {
+        let mut stream = UnixStream::connect(harness.root.path().join("test.sock"))
+            .await
+            .unwrap();
+        let header = format!(
+            "POST /v1/core/start HTTP/1.1\r\nHost: helper\r\nContent-Length: {length}\r\n\r\n"
+        );
+        stream.write_all(header.as_bytes()).await.unwrap();
+        let mut response = Vec::new();
+        tokio::time::timeout(Duration::from_secs(2), stream.read_to_end(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        let response = String::from_utf8(response).unwrap();
+        assert!(response.starts_with("HTTP/1.1 401"));
+        assert!(response.to_ascii_lowercase().contains("connection: close"));
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn real_http_session_origin_and_token_boundaries() {
     let Some(harness) = Harness::new().await else {
         return;

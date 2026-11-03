@@ -61,6 +61,9 @@ function publish(patch: Partial<WindowsUpdateState>): WindowsUpdateState {
 async function fetchUpdate(url: string, options?: RequestInit): Promise<Response> {
   if (!updateSession) {
     updateSession = session.fromPartition('windows-updates', { cache: false })
+    updateSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+      callback({ cancel: !details.url.startsWith('https://') })
+    })
   }
   // CNB remains usable without a running core; GitHub follows the user's
   // system proxy, without introducing an unrelated third-party download proxy.

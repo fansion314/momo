@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   disposeConfig: vi.fn(),
   setProxy: vi.fn(),
   closeConnections: vi.fn(),
+  beforeRequest: vi.fn(),
   fetch: vi.fn()
 }))
 
@@ -71,6 +72,7 @@ vi.mock('electron', () => ({
     fromPartition: () => ({
       setProxy: mocks.setProxy,
       closeAllConnections: mocks.closeConnections,
+      webRequest: { onBeforeRequest: mocks.beforeRequest },
       fetch: mocks.fetch
     })
   },
@@ -156,6 +158,15 @@ describe('Windows update coordination', () => {
     )
     await updater.checkWindowsUpdate()
     expect(mocks.setProxy).toHaveBeenLastCalledWith({ mode: 'direct' })
+    expect(mocks.beforeRequest).toHaveBeenCalledWith({ urls: ['<all_urls>'] }, expect.any(Function))
+    const guard = mocks.beforeRequest.mock.calls[0][1]
+    const allow = vi.fn()
+    guard({ url: 'https://cnb.cool/update' }, allow)
+    expect(allow).toHaveBeenLastCalledWith({ cancel: false })
+    guard({ url: 'http://insecure.test/update' }, allow)
+    expect(allow).toHaveBeenLastCalledWith({ cancel: true })
+    guard({ url: 'file:///C:/update.exe' }, allow)
+    expect(allow).toHaveBeenLastCalledWith({ cancel: true })
     await updater.checkWindowsUpdate()
     expect(mocks.setProxy).toHaveBeenCalledTimes(1)
     mocks.config.windowsUpdateSource = 'github'

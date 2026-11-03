@@ -19,6 +19,12 @@ import { verifyWindowsUpdateEnvelope } from './windows-update-manifest'
 export type UpdateFetch = (url: string, options?: RequestInit) => Promise<Response>
 const JSON_LIMIT = 2 * 1024 * 1024
 
+function secureResponse(url: string, response: Response): boolean {
+  // Electron's session.fetch currently leaves Response.url empty. The dedicated
+  // session blocks non-HTTPS requests and redirects before they reach the network.
+  return url.startsWith('https://') && (!response.url || response.url.startsWith('https://'))
+}
+
 export async function fetchUpdateJson(
   url: string,
   fetcher: UpdateFetch,
@@ -29,7 +35,7 @@ export async function fetchUpdateJson(
     credentials: 'omit',
     headers: { Accept: 'application/json', 'User-Agent': 'Clash-Momo-Windows-Updater' }
   })
-  if (!response.ok || !response.body || !response.url.startsWith('https://')) {
+  if (!response.ok || !response.body || !secureResponse(url, response)) {
     await response.body?.cancel().catch(() => {})
     throw new Error(`Windows update source returned HTTP ${response.status}`)
   }
@@ -140,7 +146,7 @@ export async function downloadUpdateAsset(
   const partial = `${file}.partial`
   await rm(partial, { force: true })
   const response = await fetcher(url, { signal, credentials: 'omit' })
-  if (!response.ok || !response.body || !response.url.startsWith('https://')) {
+  if (!response.ok || !response.body || !secureResponse(url, response)) {
     await response.body?.cancel().catch(() => {})
     throw new Error(`Windows update download returned HTTP ${response.status}`)
   }

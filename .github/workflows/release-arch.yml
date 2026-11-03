@@ -84,8 +84,15 @@ jobs:
           ref: ${{ needs.resolve.outputs.commit }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          pattern: clash-momo-*
-          merge-multiple: true
+          name: clash-momo-arch
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: clash-momo-macos
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: clash-momo-windows
           path: dist
       - name: Sign and publish immutable release
         env:
