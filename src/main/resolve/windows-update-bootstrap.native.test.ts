@@ -1,6 +1,17 @@
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -18,7 +29,9 @@ describe.skipIf(process.platform !== 'win32' || process.env.MOMO_NATIVE_BOOTSTRA
       const report = path.join(directory, 'result.txt')
       const restartReport = path.join(directory, 'restart.txt')
       const callerReport = path.join(directory, 'caller.txt')
+      const installerRelease = path.join(directory, 'release-installer.txt')
       const installDirectory = path.join(directory, '中文 空格 Clash Momo')
+      const movedDirectory = path.join(directory, '移动中的 Clash Momo')
       const application = path.join(installDirectory, 'Clash Momo.exe')
       const program = path.win32.join(
         process.env.SystemRoot || 'C:\\Windows',
@@ -30,6 +43,7 @@ describe.skipIf(process.platform !== 'win32' || process.env.MOMO_NATIVE_BOOTSTRA
       const reportPath = Buffer.from(report).toString('base64')
       const restartPath = Buffer.from(restartReport).toString('base64')
       const callerPath = Buffer.from(callerReport).toString('base64')
+      const releasePath = Buffer.from(installerRelease).toString('base64')
       const source = `using System; using System.IO; using System.Diagnostics; using System.Runtime.InteropServices; using System.Security.AccessControl; using System.Security.Principal;
 public class MomoUpdateFixture {
   [DllImport("advapi32.dll", SetLastError=true)]
@@ -50,7 +64,15 @@ public class MomoUpdateFixture {
     try {
       if (!GetTokenInformation(token, 18, out elevationType, 4, out required) || !GetTokenInformation(token, 20, out elevated, 4, out required)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     } finally { CloseHandle(token); }
-    File.WriteAllLines(target, new string[] { exe, Environment.CommandLine, security, WindowsIdentity.GetCurrent().User.Value, elevationType.ToString(), elevated.ToString(), Process.GetCurrentProcess().SessionId.ToString() });
+    File.WriteAllLines(target, new string[] { exe, Environment.CommandLine, security, WindowsIdentity.GetCurrent().User.Value, elevationType.ToString(), elevated.ToString(), Process.GetCurrentProcess().SessionId.ToString(), Environment.CurrentDirectory });
+    if (!caller && !restarting) {
+      string release = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String("${releasePath}"));
+      DateTime deadline = DateTime.UtcNow.AddSeconds(20);
+      while (!File.Exists(release)) {
+        if (DateTime.UtcNow >= deadline) return 17;
+        System.Threading.Thread.Sleep(50);
+      }
+    }
     return 0;
   }
 }`
@@ -71,11 +93,16 @@ public class MomoUpdateFixture {
         )
         await mkdir(installDirectory, { recursive: true })
         await cp(executable, application)
-        await execFilePromise(executable, ['--caller'], { timeout: 10000, windowsHide: true })
+        await execFilePromise(executable, ['--caller'], {
+          timeout: 10000,
+          windowsHide: true,
+          cwd: installDirectory
+        })
         const bytes = await readFile(executable)
         parent = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], {
           stdio: 'ignore',
-          windowsHide: true
+          windowsHide: true,
+          cwd: installDirectory
         })
         if (!parent.pid) throw new Error('Missing fixture parent PID')
         const corruptCommand = windowsUpdateInstallCommand(
@@ -87,7 +114,8 @@ public class MomoUpdateFixture {
         await expect(
           execFilePromise(corruptCommand.program, corruptCommand.args, {
             timeout: 60000,
-            windowsHide: true
+            windowsHide: true,
+            cwd: installDirectory
           })
         ).rejects.toThrow()
         await expect(stat(report)).rejects.toThrow()
@@ -105,6 +133,7 @@ public class MomoUpdateFixture {
         await execFilePromise(command.program, command.args, {
           timeout: 60000,
           windowsHide: true,
+          cwd: installDirectory,
           env: { ...process.env, MOMO_UPDATE_FIXTURE_REPORT: report }
         })
         // The protected copy is ready, but the installer must not execute while
@@ -112,12 +141,22 @@ public class MomoUpdateFixture {
         await expect(stat(report)).rejects.toThrow()
         await expect(stat(restartReport)).rejects.toThrow()
         parent.kill()
+        if (parent.exitCode === null && parent.signalCode === null) {
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Fixture parent did not exit')), 5000)
+            parent?.once('exit', () => {
+              clearTimeout(timer)
+              resolve()
+            })
+          })
+        }
         const deadline = Date.now() + 30000
+        let installerWorkingDirectory: string | undefined
         while (Date.now() < deadline) {
           try {
-            const [installedFrom, commandLine, security] = (await readFile(report, 'utf8'))
-              .trim()
-              .split(/\r?\n/)
+            const installer = (await readFile(report, 'utf8')).trim().split(/\r?\n/)
+            const [installedFrom, commandLine, security] = installer
+            installerWorkingDirectory = installer[7]
             protectedDirectory = path.dirname(installedFrom)
             expect(installedFrom).not.toBe(executable)
             expect(protectedDirectory).toContain('ClashMomoUpdate-')
@@ -136,6 +175,38 @@ public class MomoUpdateFixture {
           }
         }
         if (!protectedDirectory) throw new Error('Protected installer did not produce a report')
+        if (!installerWorkingDirectory)
+          throw new Error('Installer did not report its working directory')
+        expect((await realpath(installerWorkingDirectory)).toLowerCase()).toBe(
+          (await realpath(tmpdir())).toLowerCase()
+        )
+        const move = async (from: string, to: string): Promise<void> => {
+          const unlockedDeadline = Date.now() + 5000
+          while (true) {
+            try {
+              await rename(from, to)
+              return
+            } catch (error) {
+              if (
+                !['EPERM', 'EBUSY', 'EACCES'].includes(
+                  (error as NodeJS.ErrnoException).code || ''
+                ) ||
+                Date.now() >= unlockedDeadline
+              )
+                throw error
+              await new Promise((resolve) => setTimeout(resolve, 100))
+            }
+          }
+        }
+        // Keep the installer and completion waiter alive during both actual
+        // renames: neither may retain the old application directory as its cwd.
+        await move(installDirectory, movedDirectory)
+        try {
+          await stat(path.join(movedDirectory, 'Clash Momo.exe'))
+        } finally {
+          await move(movedDirectory, installDirectory)
+        }
+        await writeFile(installerRelease, 'allow installer completion')
         let restarted: string[] | undefined
         while (Date.now() < deadline) {
           try {
@@ -151,7 +222,10 @@ public class MomoUpdateFixture {
         const caller = (await readFile(callerReport, 'utf8')).trim().split(/\r?\n/)
         expect(restarted[0]).toBe(application)
         expect(restarted[1]).toContain('--updated')
-        expect(restarted.slice(3)).toEqual(caller.slice(3))
+        expect(restarted.slice(3, 7)).toEqual(caller.slice(3, 7))
+        expect(path.resolve(restarted[7]).toLowerCase()).toBe(
+          path.resolve(installDirectory).toLowerCase()
+        )
         let completion:
           { status: string; application: string; installerExitCode: number } | undefined
         while (Date.now() < deadline) {
@@ -177,18 +251,22 @@ public class MomoUpdateFixture {
           JSON.stringify(
             {
               restartedFrom: restarted[0],
+              installerWorkingDirectory,
+              oldApplicationDirectoryMovedWhileInstallerAndWaiterAlive: true,
               completion,
               caller: {
                 sid: caller[3],
                 tokenElevationType: caller[4],
                 elevated: caller[5],
-                sessionId: caller[6]
+                sessionId: caller[6],
+                workingDirectory: caller[7]
               },
               restarted: {
                 sid: restarted[3],
                 tokenElevationType: restarted[4],
                 elevated: restarted[5],
-                sessionId: restarted[6]
+                sessionId: restarted[6],
+                workingDirectory: restarted[7]
               },
               scope:
                 'Administrator CI runner; records caller-token preservation without claiming nonadministrator desktop or interactive UAC coverage.'
@@ -209,6 +287,7 @@ public class MomoUpdateFixture {
         expect(protectedDirectory).toBeUndefined()
       } finally {
         parent?.kill()
+        await writeFile(installerRelease, 'release after test failure').catch(() => {})
         await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
         if (protectedDirectory) await rm(protectedDirectory, { recursive: true, force: true })
       }

@@ -221,6 +221,11 @@ describe('Windows update coordination', () => {
     expect(mocks.execFile).not.toHaveBeenCalled()
     await updater.installWindowsUpdate()
     expect(mocks.execFile).toHaveBeenCalledTimes(1)
+    expect(mocks.execFile.mock.calls[0][2]).toMatchObject({
+      cwd: mocks.directory,
+      windowsHide: true,
+      timeout: 300000
+    })
     expect(mocks.quit).toHaveBeenCalledTimes(1)
     expect(mocks.verify).toHaveBeenCalledTimes(1)
   })

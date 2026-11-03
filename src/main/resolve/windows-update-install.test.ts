@@ -32,6 +32,7 @@ describe('Windows update elevation launcher', () => {
     expect(launcher).toContain("Notify-UpdateCompletion 'error'")
     expect(launcher).toContain('$installer.WaitForExit(300000)')
     expect(launcher).toContain('$installer.Kill()')
+    expect(launcher).toContain('-WorkingDirectory ([IO.Path]::GetTempPath())')
     expect(launcher.indexOf('ComputeHash')).toBeLessThan(launcher.indexOf('\'{"status":"ready"}\''))
     expect(launcher).not.toContain(executable)
     const payload = launcher.match(/FromBase64String\('([A-Za-z0-9+/=]+)'\)/)?.[1]
@@ -51,6 +52,7 @@ describe('Windows update elevation launcher', () => {
       request.indexOf('$waiter = Start-Process')
     )
     expect(request).toContain('Stop-Process -Id $waiter.Id')
+    expect(request.match(/-WorkingDirectory \(\[IO.Path\]::GetTempPath\(\)\)/g)).toHaveLength(2)
   })
 
   it('rejects invalid process and integrity metadata', () => {

@@ -246,7 +246,11 @@ export function installWindowsUpdate(): Promise<WindowsUpdateState> {
       try {
         // The elevated process waits for our normal before-quit cleanup. UAC
         // cancellation returns before touching the current core or proxy state.
-        await execFilePromise(command.program, command.args, { windowsHide: true, timeout: 300000 })
+        await execFilePromise(command.program, command.args, {
+          cwd: app.getPath('temp'),
+          windowsHide: true,
+          timeout: 300000
+        })
       } catch (error) {
         publish({ phase: 'downloaded', error: i18next.t('windowsUpdate.installCanceled') })
         await appLogger.warn('Windows update elevation was canceled or could not start', error)

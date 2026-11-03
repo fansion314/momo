@@ -136,7 +136,7 @@ try {
   if (Get-Process -Id ${parentPid} -ErrorAction SilentlyContinue) {
     Wait-Process -Id ${parentPid} -Timeout 60 -ErrorAction Stop
   }
-  $installer = Start-Process -FilePath $protected -ArgumentList $payload.arguments -PassThru -ErrorAction Stop
+  $installer = Start-Process -FilePath $protected -WorkingDirectory ([IO.Path]::GetTempPath()) -ArgumentList $payload.arguments -PassThru -ErrorAction Stop
   if (!$installer.WaitForExit(300000)) {
     $installer.Kill()
     [void]$installer.WaitForExit(5000)
@@ -175,7 +175,7 @@ try { & ([ScriptBlock]::Create($reader.ReadToEnd())) } finally { $reader.Dispose
 }
 try {
   $installerCommand = Launcher-Arguments '${launcher}'
-  Start-Process -FilePath ([Environment]::GetFolderPath('System') + '\\WindowsPowerShell\\v1.0\\powershell.exe') -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', $installerCommand) -ErrorAction Stop | Out-Null
+  Start-Process -FilePath ([Environment]::GetFolderPath('System') + '\\WindowsPowerShell\\v1.0\\powershell.exe') -WorkingDirectory ([IO.Path]::GetTempPath()) -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', $installerCommand) -ErrorAction Stop | Out-Null
   $wait = $receiptPipe.BeginWaitForConnection($null, $null)
   if (!$wait.AsyncWaitHandle.WaitOne(45000)) { throw 'Timed out preparing the protected Windows update' }
   $receiptPipe.EndWaitForConnection($wait)
@@ -187,7 +187,7 @@ try {
   # This worker inherits the original caller token, without requesting elevation.
   # It outlives this request so the application can quit before installation.
   $restartCommand = Launcher-Arguments '${restart}'
-  $waiter = Start-Process -FilePath ([Environment]::GetFolderPath('System') + '\\WindowsPowerShell\\v1.0\\powershell.exe') -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', $restartCommand) -PassThru -ErrorAction Stop
+  $waiter = Start-Process -FilePath ([Environment]::GetFolderPath('System') + '\\WindowsPowerShell\\v1.0\\powershell.exe') -WorkingDirectory ([IO.Path]::GetTempPath()) -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', $restartCommand) -PassThru -ErrorAction Stop
 } catch {
   if ($waiter -and !$waiter.HasExited) { Stop-Process -Id $waiter.Id -Force -ErrorAction SilentlyContinue }
   [Console]::Error.WriteLine($_.Exception.Message)
