@@ -10,7 +10,6 @@ import (
 	"github.com/metacubex/mihomo/common/buf"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/tizi"
 	C "github.com/metacubex/mihomo/constant"
 
 	"github.com/gofrs/uuid/v5"
@@ -57,8 +56,6 @@ type tcpTracker struct {
 	manager *Manager
 
 	pushToManager bool `json:"-"`
-	tiziMeter     *tizi.Meter
-	tiziUnbind    func()
 
 	uploadBucketWindow   *bucketWindow
 	downloadBucketWindow *bucketWindow
@@ -79,7 +76,6 @@ func (tt *tcpTracker) Read(b []byte) (int, error) {
 		tt.manager.PushDownloaded(download)
 	}
 	tt.DownloadTotal.Add(download)
-	tt.tiziMeter.Add(0, download)
 	tt.TrackerInfo.MaxDownloadRate.Store(tt.downloadBucketWindow.updateMaxRate(download))
 	return n, err
 }
@@ -91,7 +87,6 @@ func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
 		tt.manager.PushDownloaded(download)
 	}
 	tt.DownloadTotal.Add(download)
-	tt.tiziMeter.Add(0, download)
 	tt.TrackerInfo.MaxDownloadRate.Store(tt.downloadBucketWindow.updateMaxRate(download))
 	return
 }
@@ -102,7 +97,6 @@ func (tt *tcpTracker) UnwrapReader() (io.Reader, []N.CountFunc) {
 			tt.manager.PushDownloaded(download)
 		}
 		tt.DownloadTotal.Add(download)
-		tt.tiziMeter.Add(0, download)
 		tt.TrackerInfo.MaxDownloadRate.Store(tt.downloadBucketWindow.updateMaxRate(download))
 	}}
 }
@@ -114,7 +108,6 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 		tt.manager.PushUploaded(upload)
 	}
 	tt.UploadTotal.Add(upload)
-	tt.tiziMeter.Add(upload, 0)
 	tt.TrackerInfo.MaxUploadRate.Store(tt.uploadBucketWindow.updateMaxRate(upload))
 	return n, err
 }
@@ -126,7 +119,6 @@ func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
 		tt.manager.PushUploaded(upload)
 	}
 	tt.UploadTotal.Add(upload)
-	tt.tiziMeter.Add(upload, 0)
 	tt.TrackerInfo.MaxUploadRate.Store(tt.uploadBucketWindow.updateMaxRate(upload))
 	return
 }
@@ -137,15 +129,11 @@ func (tt *tcpTracker) UnwrapWriter() (io.Writer, []N.CountFunc) {
 			tt.manager.PushUploaded(upload)
 		}
 		tt.UploadTotal.Add(upload)
-		tt.tiziMeter.Add(upload, 0)
 		tt.TrackerInfo.MaxUploadRate.Store(tt.uploadBucketWindow.updateMaxRate(upload))
 	}}
 }
 
 func (tt *tcpTracker) Close() error {
-	if tt.tiziUnbind != nil {
-		tt.tiziUnbind()
-	}
 	connErr := tt.Conn.Close()
 	tt.manager.Leave(tt)
 	return connErr
@@ -180,12 +168,6 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 		downloadBucketWindow: newBucketWindow(10, 100),
 	}
 
-	t.tiziMeter = tizi.Capture(t.Chain, pushToManager)
-	if t.tiziMeter != nil {
-		t.tiziUnbind = t.tiziMeter.BindClose(func() { _ = conn.Close() })
-		t.tiziMeter.Add(uploadTotal, downloadTotal)
-	}
-
 	if pushToManager {
 		if uploadTotal > 0 {
 			manager.PushUploaded(uploadTotal)
@@ -210,8 +192,6 @@ type udpTracker struct {
 	manager *Manager
 
 	pushToManager bool `json:"-"`
-	tiziMeter     *tizi.Meter
-	tiziUnbind    func()
 
 	uploadBucketWindow   *bucketWindow
 	downloadBucketWindow *bucketWindow
@@ -232,7 +212,6 @@ func (ut *udpTracker) ReadFrom(b []byte) (int, net.Addr, error) {
 		ut.manager.PushDownloaded(download)
 	}
 	ut.DownloadTotal.Add(download)
-	ut.tiziMeter.Add(0, download)
 	ut.TrackerInfo.MaxDownloadRate.Store(ut.downloadBucketWindow.updateMaxRate(download))
 	return n, addr, err
 }
@@ -244,7 +223,6 @@ func (ut *udpTracker) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 		ut.manager.PushDownloaded(download)
 	}
 	ut.DownloadTotal.Add(download)
-	ut.tiziMeter.Add(0, download)
 	ut.TrackerInfo.MaxDownloadRate.Store(ut.downloadBucketWindow.updateMaxRate(download))
 	return
 }
@@ -256,15 +234,11 @@ func (ut *udpTracker) WriteTo(b []byte, addr net.Addr) (int, error) {
 		ut.manager.PushUploaded(upload)
 	}
 	ut.UploadTotal.Add(upload)
-	ut.tiziMeter.Add(upload, 0)
 	ut.TrackerInfo.MaxUploadRate.Store(ut.uploadBucketWindow.updateMaxRate(upload))
 	return n, err
 }
 
 func (ut *udpTracker) Close() error {
-	if ut.tiziUnbind != nil {
-		ut.tiziUnbind()
-	}
 	connErr := ut.PacketConn.Close()
 	ut.manager.Leave(ut)
 	return connErr
@@ -297,12 +271,6 @@ func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, ru
 		pushToManager:        pushToManager,
 		uploadBucketWindow:   newBucketWindow(10, 100),
 		downloadBucketWindow: newBucketWindow(10, 100),
-	}
-
-	ut.tiziMeter = tizi.Capture(ut.Chain, pushToManager)
-	if ut.tiziMeter != nil {
-		ut.tiziUnbind = ut.tiziMeter.BindClose(func() { _ = conn.Close() })
-		ut.tiziMeter.Add(uploadTotal, downloadTotal)
 	}
 
 	if pushToManager {

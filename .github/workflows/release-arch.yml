@@ -1,4 +1,4 @@
-name: Release mihomomo for Arch and macOS
+name: Release mihomomo for Arch, macOS and Windows
 on:
   push:
     tags: ['mihomomo-v*']
@@ -41,7 +41,6 @@ jobs:
   checks:
     needs: resolve
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
     with:
       source_sha: ${{ needs.resolve.outputs.commit }}
   build:
@@ -58,8 +57,6 @@ jobs:
       - name: Build and install as ordinary user
         env:
           COMMIT: ${{ needs.resolve.outputs.commit }}
-          TIZI_BUILD_KEYS: ${{ secrets.TIZI_BUILD_KEYS }}
-          TIZI_REQUIRE_BUILD_KEYS: true
         run: |
           useradd -m builder
           echo 'builder ALL=(ALL) NOPASSWD: /usr/bin/pacman' > /etc/sudoers.d/builder
@@ -97,7 +94,13 @@ jobs:
           fi
           python3 packaging/arch/sign.py directory dist --tag "$TAG"
           (cd dist && for package in *.pkg.tar.zst; do sha256sum "$package" > "$package.sha256"; done)
-          gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes "Arch Linux x86_64 and macOS ARM64 packages, checksums, and source recipes."
+          version=${TAG#mihomomo-v}
+          revision=$(python3 -c 'import json;print(json.load(open("packaging/macos/release.json"))["revision"])')
+          for file in "mihomomo-${version}-x86_64.pkg.tar.zst" "mihomomo-${version}-macos-arm64-r${revision}.tar.gz" "mihomomo-${version}-windows-x64.zip"; do
+            test -s "dist/$file"
+            test -s "dist/$file.sha256"
+          done
+          gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file packaging/release-notes.md
   notify:
     needs: publish
     runs-on: ubuntu-latest

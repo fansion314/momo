@@ -292,11 +292,12 @@ func TestDailyCoalescingKeepsDayAndDimensionBoundaries(t *testing.T) {
 	}
 }
 
+// Use historical transitions: future DST schedules can change with tzdata.
 func TestCalendarDaysWithSkippedOrRepeatedMidnight(t *testing.T) {
 	for _, test := range []struct {
 		zone, date string
 		hours      int
-	}{{"America/Sao_Paulo", "2018-11-04", 23}, {"America/Havana", "2026-11-01", 25}, {"America/Santiago", "2026-09-06", 23}} {
+	}{{"America/Sao_Paulo", "2018-11-04", 23}, {"America/Havana", "2020-11-01", 25}, {"America/Santiago", "2020-09-06", 23}} {
 		t.Run(test.zone, func(t *testing.T) {
 			r := dailyRecorder(t, test.zone)
 			loc := r.aggregationLocation

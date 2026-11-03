@@ -2,13 +2,13 @@ export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 pkgname=mihomomo
 pkgver=1.19.33
-pkgrel=3
+pkgrel=4
 pkgdesc='Mihomo-based proxy core for Clash Momo'
 arch=('x86_64')
 url='https://github.com/fansion314/momo'
 license=('GPL-3.0-only')
 depends=('glibc' 'libcap')
-makedepends=('git' 'go' 'python')
+makedepends=('git' 'go')
 install=mihomomo.install
 source=("git+https://github.com/fansion314/momo.git#commit=@COMMIT@" 'mihomomo.install')
 sha256sums=('SKIP' '@INSTALL_SHA@')
@@ -16,13 +16,11 @@ options=('!debug' '!strip')
 
 build() {
   cd "$srcdir/momo"
-  CGO_ENABLED=0 GOAMD64=v1 bash packaging/build-core.sh mihomomo "$pkgver"
+  CGO_ENABLED=0 GOAMD64=v1 go build -trimpath -tags with_gvisor -ldflags "-s -w -X github.com/metacubex/mihomo/constant.Version=$pkgver" -o mihomomo .
 }
 
 check() {
   "$srcdir/momo/mihomomo" -v | grep -F "$pkgver"
-  printf '%s' '{}' | "$srcdir/momo/mihomomo" tizi --state-dir "$srcdir/tizi-capability-check" status | python3 -c \
-    'import json,sys;v=json.load(sys.stdin);assert v["ok"] and v["data"]["supported"] and v["data"]["keyReady"] and v["data"].get("managed_config_version",0)>=2'
 }
 
 package() {

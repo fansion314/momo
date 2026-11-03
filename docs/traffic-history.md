@@ -1,6 +1,6 @@
 # Traffic history
 
-Mihomomo supports Go 1.26+ and its maintained release target is Arch Linux x86_64.
+Mihomomo supports Go 1.26+ and its maintained release targets are Arch Linux x86_64, macOS ARM64 and Windows x64.
 SQLite is built in using a pure Go driver; CGO is not required. Recording is
 disabled by default and never changes the TCP/UDP read/write counters.
 

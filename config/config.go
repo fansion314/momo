@@ -27,7 +27,6 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/smart/lightgbm"
 	"github.com/metacubex/mihomo/component/sniffer"
-	"github.com/metacubex/mihomo/component/tizi"
 	"github.com/metacubex/mihomo/component/traffic_history"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
@@ -220,7 +219,6 @@ type Config struct {
 	Sniffer       *sniffer.Config
 	TLS           *TLS
 
-	TiziStateDir   string
 	TrafficHistory traffic_history.Config
 }
 
@@ -414,7 +412,6 @@ type RawTLS struct {
 }
 
 type RawConfig struct {
-	TiziStateDir                  string                  `yaml:"-" json:"-"`
 	TrafficHistory                traffic_history.Config  `yaml:"traffic-history" json:"traffic-history"`
 	Port                          int                     `yaml:"port" json:"port"`
 	SocksPort                     int                     `yaml:"socks-port" json:"socks-port"`
@@ -495,11 +492,7 @@ func Parse(buf []byte) (*Config, error) {
 		return nil, err
 	}
 
-	result, err := ParseRawConfig(rawCfg)
-	if err != nil && rawCfg.TiziStateDir != "" {
-		return nil, fmt.Errorf("managed tizi configuration is invalid")
-	}
-	return result, err
+	return ParseRawConfig(rawCfg)
 }
 
 func DefaultRawConfig() *RawConfig {
@@ -632,15 +625,6 @@ func DefaultRawConfig() *RawConfig {
 }
 
 func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
-	// Expand authenticated managed configuration before normal parsing.
-	expanded, managedDir, expandErr := tizi.ExpandConfig(buf)
-	if expandErr != nil {
-		return nil, expandErr
-	}
-	if managedDir != "" && C.MomoManaged() && filepath.Clean(managedDir) != filepath.Join(filepath.Dir(C.Path.HomeDir()), "tizi") {
-		return nil, fmt.Errorf("managed tizi directory is outside the helper state root")
-	}
-	buf = expanded
 	// config with default value
 	rawCfg := DefaultRawConfig()
 
@@ -654,26 +638,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		return nil, err
 	}
 
-	rawCfg.TiziStateDir = managedDir
-	if managedDir != "" {
-		log.SetLevel(log.SILENT)
-	}
 	return rawCfg, nil
-}
-
-// Helper authorization is enforced by UID-bound IPC and the session token.
-// The authenticated reverse proxy strips Authorization and native Unix routing
-// does not use a bearer secret. Keep the effective configuration consistent with
-// that existing boundary instead of retaining an unused subscription secret.
-func enforceHelperControllerPolicy(rawCfg *RawConfig, socket string) {
-	rawCfg.ExternalController = ""
-	rawCfg.ExternalControllerTLS = ""
-	rawCfg.ExternalControllerPipe = ""
-	rawCfg.ExternalControllerUnix = socket
-	rawCfg.ExternalUI = ""
-	rawCfg.ExternalUIURL = ""
-	rawCfg.ExternalUIName = ""
-	rawCfg.Secret = ""
 }
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
@@ -682,17 +647,17 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	if C.MomoManaged() {
 		rawCfg.NTP.WriteToSystem = false
-		enforceHelperControllerPolicy(rawCfg, C.MomoManagedSocket())
-	}
-
-	if rawCfg.TiziStateDir != "" {
+		// Controllers are always supplied by the helper, including on reload.
 		rawCfg.ExternalController = ""
 		rawCfg.ExternalControllerTLS = ""
+		rawCfg.ExternalControllerPipe = ""
+		rawCfg.ExternalControllerUnix = C.MomoManagedSocket()
 		rawCfg.ExternalUI = ""
 		rawCfg.ExternalUIURL = ""
-		rawCfg.ExternalControllerCors = RawCors{}
+		rawCfg.ExternalUIName = ""
 	}
-	config := &Config{TiziStateDir: rawCfg.TiziStateDir}
+
+	config := &Config{}
 	if err := rawCfg.TrafficHistory.Validate(); err != nil {
 		return nil, err
 	}
