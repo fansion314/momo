@@ -1,4 +1,4 @@
-name: Release clash-momo for Arch and macOS
+name: Release clash-momo for Arch, macOS and Windows
 on:
   push:
     tags: ['clash-momo-v*']
@@ -101,7 +101,13 @@ jobs:
           fi
           python3 packaging/arch/sign.py directory dist --tag "$TAG"
           (cd dist && for package in *.pkg.tar.zst; do sha256sum "$package" > "$package.sha256"; done)
-          gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes "Arch Linux x86_64 and macOS ARM64 packages, checksums, and source recipes."
+          test -s "dist/clash-momo-${TAG#clash-momo-v}-windows-x64-setup.exe"
+          test -s "dist/clash-momo-${TAG#clash-momo-v}-windows-x64-portable.zip"
+          revision=$(node -p 'require("./packaging/macos/release.json").revision')
+          test -s "dist/clash-momo-${TAG#clash-momo-v}-macos-arm64-r${revision}.tar.gz"
+          gh release create "$TAG" dist/* --draft --verify-tag --title "$TAG" --notes-file packaging/windows/release-notes.md
+          node scripts/verify-release-assets.mjs "$TAG" dist
+          gh release edit "$TAG" --draft=false --latest
   notify:
     needs: publish
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 {
   "name": "clash-momo",
   "version": "2.0.4",
-  "description": "Clash Momo proxy client for Mihomomo on Linux and macOS",
+  "description": "Clash Momo proxy client for Mihomomo on Linux, macOS and Windows",
   "type": "module",
   "main": "./out/main/index.js",
   "author": "Fansionia",
@@ -22,7 +22,8 @@
     "prepare": "node scripts/prepare.mjs",
     "build:linux": "electron-vite build",
     "dev": "node scripts/dev.mjs",
-    "build:macos": "electron-vite build && node packaging/macos/package.mjs"
+    "build:macos": "electron-vite build && node packaging/macos/package.mjs",
+    "build:windows": "electron-vite build && node packaging/windows/package.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
@@ -76,6 +77,7 @@
     "dayjs": "^1.11.23",
     "driver.js": "^1.10.1",
     "electron": "^43.8.0",
+    "electron-builder": "26.18.0",
     "electron-vite": "4.0.1",
     "electron-window-state": "^5.0.3",
     "eslint": "9.39.2",
@@ -89,6 +91,7 @@
     "motion": "12.23.26",
     "nanoid": "^6.0.2",
     "next-themes": "^0.4.6",
+    "playwright": "1.64.1",
     "postcss": "^8.5.30",
     "prettier": "^3.9.10",
     "pubsub-js": "^1.9.5",

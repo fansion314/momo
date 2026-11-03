@@ -11,8 +11,6 @@ import { calcTraffic } from '../utils/calc'
 import { floatingWindow } from '../resolve/floatingWindow'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkDir, mihomoWorkConfigPath } from '../utils/dirs'
-import { managedTiziActive } from '../tizi/policy'
-import { orderedProviderNames, runtimeProxyGroups } from './proxy-groups'
 import { createMacCoreSnapshot } from './macos-snapshot'
 import {
   MAC_HELPER_SOCKET,
@@ -328,15 +326,14 @@ export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedG
   const { mode = 'rule' } = await getControledMihomoConfig()
   if (mode === 'direct') return []
   const [proxies, runtime] = await Promise.all([mihomoProxies(), getRuntimeConfig()])
-  let orderedNames: string[] | undefined
-  if (Object.prototype.hasOwnProperty.call(runtime, 'tizi-managed')) {
-    try {
-      orderedNames = orderedProviderNames(await mihomoProxyProvider('default'))
-    } catch {
-      // Older kernels may lack the compatible default provider endpoint. Keep every group visible.
+  const rawGroups: { group: IMihomoGroup; providers: string[] }[] = []
+
+  runtime?.['proxy-groups']?.forEach((group: { name: string; url?: string; use?: string[] }) => {
+    const proxy = proxies.proxies[group.name]
+    if (isMihomoGroup(proxy) && (includeHidden || !proxy.hidden)) {
+      rawGroups.push({ group: { ...proxy, testUrl: group.url }, providers: group.use || [] })
     }
-  }
-  const rawGroups = runtimeProxyGroups(runtime, proxies, includeHidden, orderedNames)
+  })
 
   if (!rawGroups.find(({ group }) => group.name === 'GLOBAL')) {
     const global = proxies.proxies['GLOBAL']
@@ -465,10 +462,7 @@ export const mihomoHotReloadConfig = async (): Promise<void> => {
   await manageSmartOverride()
   const { profileId: current, dnsGuard } = await generateProfile()
   const appConfig = await getAppConfig()
-  const diffWorkDir =
-    appConfig.operationMode === 'simple' || managedTiziActive(appConfig)
-      ? false
-      : appConfig.diffWorkDir === true
+  const diffWorkDir = appConfig.operationMode === 'simple' ? false : appConfig.diffWorkDir === true
   const configPath = diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work')
   mihomoApiLogger.info(`hot reload config path: ${configPath}`)
   const instance = await getAxios()

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { cleanupWindowsNamedPipes, waitForCoreReady } from './process'
-import { getAxios } from './mihomoApi'
+import { cleanupWindowsNamedPipes } from './process'
 
 const mocks = vi.hoisted(() => ({
   execFile: vi.fn()
@@ -21,39 +20,6 @@ vi.mock('../utils/logger', () => ({
 vi.mock('./mihomoApi', () => ({
   getAxios: vi.fn()
 }))
-
-describe('silent managed core readiness', () => {
-  it('waits for real managed outbounds rather than an early API greeting or default GLOBAL group', async () => {
-    vi.useFakeTimers()
-    let snapshots = 0
-    const get = vi.fn(async (endpoint: string) => {
-      if (endpoint !== '/proxies') return {}
-      snapshots++
-      return {
-        proxies:
-          snapshots === 1
-            ? {
-                DIRECT: { type: 'Direct' },
-                GLOBAL: { type: 'Selector' },
-                'PASS-RULE': { type: 'PassRule' }
-              }
-            : { managed: { type: 'VLESS' } }
-      }
-    })
-    vi.mocked(getAxios).mockResolvedValue({ get } as unknown as Awaited<
-      ReturnType<typeof getAxios>
-    >)
-    try {
-      const ready = waitForCoreReady(1000, true)
-      await vi.advanceTimersByTimeAsync(100)
-      await ready
-      expect(snapshots).toBe(2)
-      expect(get).toHaveBeenCalledWith('/configs')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-})
 
 const tasklistOutput = [
   '"MihomoTray.exe","1001","Console","1","10,000 K"',
@@ -106,7 +72,7 @@ describe('cleanupWindowsNamedPipes', () => {
 
     await cleanupWindowsNamedPipes()
 
-    expect(terminatedPids()).toEqual([1002, 1006])
+    expect(terminatedPids()).toEqual([1002])
     const powershellArgs = mocks.execFile.mock.calls.find(([file]) => file === 'powershell')?.[1]
     expect(powershellArgs?.join(' ')).toContain('Get-Process -Id 1002,1003,1006')
   })
@@ -123,11 +89,20 @@ describe('cleanupWindowsNamedPipes', () => {
     expect(terminatedPids()).toEqual([])
   })
 
-  it('falls back to exact executable names when paths cannot be inspected', async () => {
+  it('preserves unknown processes when paths cannot be inspected', async () => {
     mockExecFile(null, new Error('powershell unavailable'))
 
     await cleanupWindowsNamedPipes()
 
-    expect(terminatedPids()).toEqual([1002, 1003, 1006])
+    expect(terminatedPids()).toEqual([])
+  })
+
+  it('preserves unknown processes when path inspection returns invalid JSON', async () => {
+    mocks.execFile.mockImplementation(
+      (file: string, _args: string[], _options: unknown, callback) =>
+        callback(null, { stdout: file === 'tasklist' ? tasklistOutput : 'invalid', stderr: '' })
+    )
+    await cleanupWindowsNamedPipes()
+    expect(terminatedPids()).toEqual([])
   })
 })

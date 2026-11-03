@@ -9,11 +9,8 @@ import {
   createProfile,
   getProfileImportInfo,
   getProfileConfig,
-  getProfileStr,
-  setProfileStr,
-  setProfileConfig,
-  changeCurrentProfile,
   getProfileItem,
+  getProfileStr,
   removeProfileItem,
   updateProfileConfig,
   updateProfileItem,
@@ -43,11 +40,7 @@ const mocks = vi.hoisted(() => ({
   generateProfile: vi.fn(),
   hotReload: vi.fn(),
   restartCore: vi.fn(),
-  yamlMaxAliasCount: 100,
-  tiziActive: false,
-  tiziAction: vi.fn(),
-  tiziProfile: vi.fn(),
-  send: vi.fn()
+  yamlMaxAliasCount: 100
 }))
 
 vi.mock('electron', () => ({ app: { getVersion: () => '2.0.0' } }))
@@ -128,20 +121,9 @@ vi.mock('./app', () => ({
       core: 'mihomo',
       subscriptionTimeout: 30000,
       userAgent: 'mihomo.party/v2.0.0 (clash.meta)',
-      yamlMaxAliasCount: mocks.yamlMaxAliasCount,
-      tiziActive: mocks.tiziActive
-    }),
-  patchAppConfig: async (patch: Partial<IAppConfig>) => {
-    if (patch.tiziActive !== undefined) mocks.tiziActive = patch.tiziActive
-  }
+      yamlMaxAliasCount: mocks.yamlMaxAliasCount
+    })
 }))
-vi.mock('../tizi', () => ({
-  tiziAction: mocks.tiziAction,
-  getTiziProfileItem: mocks.tiziProfile,
-  invalidateTiziProfileItem: vi.fn()
-}))
-vi.mock('../resolve/backup', () => ({ initWebdavBackupScheduler: vi.fn() }))
-vi.mock('../window', () => ({ mainWindow: { webContents: { send: mocks.send } } }))
 vi.mock('./controledMihomo', () => ({
   getControledMihomoConfig: () => Promise.resolve({ 'mixed-port': 7890 })
 }))
@@ -191,15 +173,6 @@ beforeEach(async () => {
   mocks.checkProfileConfig.mockResolvedValue(undefined)
   mocks.hotReload.mockResolvedValue(undefined)
   mocks.yamlMaxAliasCount = 100
-  mocks.tiziActive = false
-  mocks.tiziProfile.mockResolvedValue({
-    id: 'tizi-managed',
-    type: 'managed',
-    name: '受保护团购订阅'
-  })
-  mocks.tiziAction.mockImplementation(async (action: string) => {
-    mocks.tiziActive = action === 'activate'
-  })
   // the plugin record the schedule is read from at write time
   mocks.getPluginItem.mockResolvedValue({ id: 'pg', interval: 60, autoUpdate: true })
   // the module caches must match the freshly written files (all real writes go through the queue and keep them in sync)
@@ -218,40 +191,37 @@ const globalOverride = (id: string) =>
   }) as const
 
 afterEach(() => {
-  vi.unstubAllGlobals()
   rmSync(testDir, { recursive: true, force: true })
 })
 
-describe('protected managed subscription profile', () => {
-  it('exposes only a virtual metadata entry and preserves the previous private profile on disk', async () => {
-    vi.stubGlobal('__TIZI_ENABLED__', true)
-    const list = await getProfileConfig(true)
-    expect(list.items.find((item) => item.id === 'tizi-managed')).toEqual({
-      id: 'tizi-managed',
-      type: 'managed',
-      name: '受保护团购订阅'
+describe('retired managed subscription compatibility', () => {
+  it('restores an ordinary profile without deleting historical or account data', async () => {
+    writeFileSync(
+      join(testDir, 'profile.yaml'),
+      'current: tizi-managed\nitems:\n  - id: tizi-managed\n    type: managed\n    name: Retired\n  - id: remote\n    type: remote\n    name: Remote\n'
+    )
+    writeFileSync(
+      join(testDir, 'profiles', 'tizi-managed.yaml'),
+      'tizi-managed: {state-dir: sealed}\n'
+    )
+    writeFileSync(join(testDir, 'traffic-history.db'), 'existing-history')
+    mkdirSync(join(testDir, 'tizi'))
+    writeFileSync(join(testDir, 'tizi', 'account.enc'), 'sealed-account')
+    expect(await getProfileConfig(true)).toMatchObject({
+      current: 'remote',
+      items: [{ id: 'remote' }]
     })
-    await changeCurrentProfile('tizi-managed')
-    expect(mocks.tiziAction).toHaveBeenCalledWith('activate')
-    expect((await getProfileConfig()).current).toBe('tizi-managed')
-    expect(readFileSync(join(testDir, 'profile.yaml'), 'utf8')).not.toContain('tizi-managed')
-    await setProfileConfig(await getProfileConfig())
-    expect(readFileSync(join(testDir, 'profile.yaml'), 'utf8')).not.toContain('tizi-managed')
-    await changeCurrentProfile('remote')
-    expect(mocks.tiziActive).toBe(false)
-    expect((await getProfileConfig()).current).toBe('remote')
-    expect(mocks.send).toHaveBeenCalledWith('appConfigUpdated')
-    expect(mocks.send).toHaveBeenCalledWith('profileConfigUpdated')
+    expect(await getProfileStr('remote')).toBe(oldProfile)
+    expect(await getProfileStr('tizi-managed')).not.toContain('tizi-managed')
+    expect(readFileSync(join(testDir, 'traffic-history.db'), 'utf8')).toBe('existing-history')
+    expect(readFileSync(join(testDir, 'tizi', 'account.enc'), 'utf8')).toBe('sealed-account')
   })
 
-  it('rejects raw reads, modifications and deletion even when called without renderer controls', async () => {
-    await expect(getProfileStr('tizi-managed')).rejects.toThrow('受保护')
-    await expect(setProfileStr('tizi-managed', 'proxies: []')).rejects.toThrow('受保护')
-    await expect(removeProfileItem('tizi-managed')).rejects.toThrow('受保护')
-    await expect(createProfile({ id: 'other', type: 'managed' })).rejects.toThrow('受保护')
-    await expect(
-      updateProfileItem({ id: 'tizi-managed', type: 'managed', name: 'changed' })
-    ).rejects.toThrow('受保护')
+  it('uses the empty profile when no ordinary profile remains', async () => {
+    writeFileSync(join(testDir, 'profile.yaml'), 'current: tizi-managed\nitems: []\n')
+    const config = await getProfileConfig(true)
+    expect(config.current).toBeUndefined()
+    expect(await getProfileStr(config.current)).not.toContain('tizi-managed')
   })
 })
 

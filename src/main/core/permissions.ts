@@ -1,4 +1,4 @@
-import { exec, execFile } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { app, dialog, ipcMain } from 'electron'
@@ -9,8 +9,8 @@ import { checkAutoRun, enableAutoRun } from '../sys/autoRun'
 import i18next from '../../shared/i18n'
 import { checkAdminPrivileges } from './admin'
 import { ensureMacService, macServiceStatus } from './macos-service'
+import { windowsElevationCommand } from './windows-elevation'
 
-const execPromise = promisify(exec)
 const execFilePromise = promisify(execFile)
 
 // 内核名称白名单
@@ -20,7 +20,7 @@ type StopCoreBeforeAdminRestart = (force?: boolean) => Promise<void>
 
 let stopCoreBeforeAdminRestart: StopCoreBeforeAdminRestart | null = null
 
-export function setStopCoreBeforeAdminRestart(stopCore: StopCoreBeforeAdminRestart): void {
+export function setStopCoreBeforeAdminRestart(stopCore: StopCoreBeforeAdminRestart | null): void {
   stopCoreBeforeAdminRestart = stopCore
 }
 
@@ -30,7 +30,7 @@ export function isValidCoreName(core: string): core is AllowedCore {
 
 export function validateCorePath(corePath: string): void {
   if (corePath !== mihomoCorePath()) {
-    throw new Error('Invalid core path: only /usr/bin/mihomomo is supported')
+    throw new Error(`Invalid core path: only ${mihomoCorePath()} is supported`)
   }
 }
 
@@ -72,6 +72,7 @@ export { checkAdminPrivileges } from './admin'
 
 export async function checkMihomoCorePermissions(): Promise<boolean> {
   if (process.platform === 'darwin') return (await macServiceStatus()).compatible
+  if (process.platform === 'win32') return existsSync(mihomoCorePath()) && checkAdminPrivileges()
   try {
     const { stdout } = await execFilePromise('/usr/bin/getcap', [mihomoCorePath()], {
       timeout: 3000
@@ -94,12 +95,9 @@ export async function checkHighPrivilegeCore(): Promise<boolean> {
         return false
       }
 
-      const hasHighPrivilegeProcess = await checkHighPrivilegeMihomoProcess()
-      if (hasHighPrivilegeProcess) {
-        managerLogger.info('Found high privilege mihomo process running')
-        return true
-      }
-
+      // Another same-named process (especially one with an inaccessible path)
+      // does not establish ownership by this package. Windows has no installed
+      // core service; our child inherits this client's token.
       const isAdmin = await checkAdminPrivileges()
       managerLogger.info(`Current process admin privileges: ${isAdmin}`)
       return isAdmin
@@ -117,115 +115,10 @@ export async function checkHighPrivilegeCore(): Promise<boolean> {
   return false
 }
 
-async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
-  const mihomoExecutables = process.platform === 'win32' ? ['mihomomo.exe'] : ['mihomomo']
-
-  try {
-    if (process.platform === 'win32') {
-      let stdout = ''
-      try {
-        const result = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'], {
-          windowsHide: true,
-          timeout: 3000,
-          maxBuffer: 4 * 1024 * 1024
-        })
-        stdout = result.stdout
-      } catch (error) {
-        managerLogger.error('Failed to list processes via tasklist', error)
-        return false
-      }
-
-      const candidatePids: { pid: string; image: string }[] = []
-      for (const line of stdout.split('\n')) {
-        const match = line.match(/^"([^"]+)","(\d+)"/)
-        if (!match) continue
-        const image = match[1].toLowerCase()
-        if (mihomoExecutables.includes(image)) {
-          candidatePids.push({ pid: match[2], image })
-        }
-      }
-
-      if (candidatePids.length === 0) {
-        managerLogger.info('No mihomo processes found running')
-        return false
-      }
-
-      managerLogger.info(`Found ${candidatePids.length} mihomo processes running`)
-
-      const pidArgs = candidatePids.map(({ pid }) => pid).join(',')
-      try {
-        const { stdout: processInfo } = await execFilePromise(
-          'powershell',
-          [
-            '-NoProfile',
-            '-Command',
-            `Get-Process -Id ${pidArgs} -ErrorAction SilentlyContinue | Select-Object Name,Id,Path | ConvertTo-Json -Compress`
-          ],
-          { windowsHide: true, timeout: 4000, maxBuffer: 4 * 1024 * 1024 }
-        )
-
-        if (!processInfo.trim()) return false
-
-        const parsed = JSON.parse(processInfo)
-        const list = Array.isArray(parsed) ? parsed : [parsed]
-        for (const proc of list) {
-          if (
-            proc &&
-            typeof proc.Name === 'string' &&
-            proc.Name.toLowerCase() === 'mihomomo' &&
-            proc.Path === null
-          ) {
-            return true
-          }
-        }
-      } catch (error) {
-        managerLogger.info('PowerShell process inspection failed', error)
-      }
-    } else {
-      let foundProcesses = false
-
-      for (const executable of mihomoExecutables) {
-        try {
-          const { stdout } = await execPromise(`ps aux | grep ${executable} | grep -v grep`)
-          const lines = stdout
-            .split('\n')
-            .filter((line) => line.trim() && line.includes(executable))
-
-          if (lines.length > 0) {
-            foundProcesses = true
-            managerLogger.info(`Found ${lines.length} ${executable} processes running`)
-
-            for (const line of lines) {
-              const parts = line.trim().split(/\s+/)
-              if (parts.length >= 1) {
-                const user = parts[0]
-                managerLogger.info(`${executable} process running as user: ${user}`)
-
-                if (user === 'root') {
-                  return true
-                }
-              }
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      if (!foundProcesses) {
-        managerLogger.info('No mihomo processes found running')
-      }
-    }
-  } catch (error) {
-    managerLogger.error('Failed to check high privilege mihomo process', error)
-  }
-
-  return false
-}
-
 // File ownership and capabilities belong to pacman, never the Electron runtime.
 export async function grantTunPermissions(): Promise<void> {
   if (process.platform === 'darwin') return ensureMacService()
+  if (process.platform === 'win32') return restartAsAdmin()
   if (await checkMihomoCorePermissions()) return
   throw new Error(KERNEL_PERMISSIONS_MESSAGE)
 }
@@ -235,37 +128,17 @@ export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
     throw new Error('This function is only available on Windows')
   }
 
-  // 先停止 Core，避免新旧进程冲突
-  try {
-    managerLogger.info('Stopping core before admin restart...')
-    await stopCoreBeforeAdminRestart?.(true)
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  } catch (error) {
-    managerLogger.warn('Failed to stop core before restart:', error)
-  }
-
   const exePath = process.execPath
   const args = process.argv.slice(1).filter((arg) => arg !== '--admin-restart-for-tun')
   const restartArgs = forTun ? [...args, '--admin-restart-for-tun'] : args
 
-  const escapedExePath = exePath.replace(/'/g, "''")
-  const argsString = restartArgs.map((arg) => arg.replace(/'/g, "''")).join("', '")
-
-  // 使用 Start-Sleep 延迟启动，确保旧进程完全退出后再启动新进程
-  const command =
-    restartArgs.length > 0
-      ? `powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -ArgumentList '${argsString}' -Verb RunAs"`
-      : `powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -Verb RunAs"`
-
-  managerLogger.info('Restarting as administrator with command', command)
-
-  // 先启动 PowerShell（它会等待 1 秒），然后立即退出当前进程
-  exec(command, { windowsHide: true }, (error) => {
-    if (error) {
-      managerLogger.error('Failed to start PowerShell for admin restart', error)
-    }
-  })
-  managerLogger.info('PowerShell command started, quitting app immediately')
+  const command = windowsElevationCommand(exePath, restartArgs, process.pid)
+  // Request UAC before stopping anything. Cancellation leaves this instance and
+  // its core intact. The elevated launcher waits for our exit before starting
+  // the client, avoiding the single-instance lock race.
+  await execFilePromise(command.program, command.args, { windowsHide: true, timeout: 300000 })
+  managerLogger.info('Administrator restart authorized; stopping the current core')
+  await stopCoreBeforeAdminRestart?.(true)
   app.exit(0)
 }
 

@@ -12,6 +12,19 @@ let packaged = false
 let portable = false
 let appName = 'mihomo-party'
 let appPath = '/tmp/clash-momo'
+function platform(value: string, resourcesPath?: string): void {
+  vi.stubGlobal(
+    'process',
+    new Proxy(process, {
+      get: (target, key) =>
+        key === 'platform'
+          ? value
+          : key === 'resourcesPath' && resourcesPath
+            ? resourcesPath
+            : Reflect.get(target, key)
+    })
+  )
+}
 const paths: Record<string, string> = {}
 const setPath = vi.fn((name: string, value: string) => {
   paths[name] = value
@@ -65,25 +78,6 @@ afterEach(() => {
 })
 
 describe('configureAppPaths', () => {
-  it('keeps the isolated tizi test app and bundled core separate from the installed client', async () => {
-    packaged = true
-    vi.stubGlobal('__TIZI_TEST_BUILD__', true)
-    vi.stubGlobal(
-      'process',
-      new Proxy(process, {
-        get: (target, key) =>
-          key === 'platform'
-            ? 'darwin'
-            : key === 'resourcesPath'
-              ? '/tmp/Tizi Test.app/Contents/Resources'
-              : Reflect.get(target, key)
-      })
-    )
-    const { configureAppPaths, mihomoCorePath } = await import('./dirs')
-    configureAppPaths()
-    expect(paths.userData).toBe(path.join(APP_DATA, 'clash-momo-tizi-test'))
-    expect(mihomoCorePath()).toBe('/tmp/Tizi Test.app/Contents/Resources/files/mihomomo-tizi')
-  })
   it('isolates an unpackaged local development app', async () => {
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()
@@ -102,6 +96,8 @@ describe('configureAppPaths', () => {
   })
 
   it('uses production identity and resources for the system Electron directory install', async () => {
+    platform('linux')
+    vi.spyOn(path, 'resolve').mockImplementation((...parts) => parts.join('/'))
     appPath = '/usr/lib/clash-momo'
     const { configureAppPaths, resourcesDir } = await import('./dirs')
     configureAppPaths()
@@ -126,17 +122,36 @@ describe('configureAppPaths', () => {
     )
     const { resourcesDir, resourcesFilesDir } = await import('./dirs')
     expect(resourcesDir()).toBe('/Applications/Clash Momo.app/Contents/Resources')
-    expect(resourcesFilesDir()).toBe('/Applications/Clash Momo.app/Contents/Resources/files')
+    expect(resourcesFilesDir()).toBe(path.join(resourcesDir(), 'files'))
   })
 
   it('resolves every legacy core choice to the sole system binary', async () => {
+    platform('linux')
     const { mihomoCorePath } = await import('./dirs')
     for (const core of ['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific', 'mihomomo']) {
-      expect(mihomoCorePath(core)).toBe(
-        process.platform === 'darwin'
-          ? '/opt/homebrew/opt/mihomomo/bin/mihomomo'
-          : '/usr/bin/mihomomo'
-      )
+      expect(mihomoCorePath(core)).toBe(path.join('/usr/bin', 'mihomomo'))
     }
+  })
+
+  it.each(['app', 'app.asar'])('resolves the bundled Windows core from %s', async (layout) => {
+    packaged = true
+    appPath = path.join(EXE_DIR, 'resources', layout)
+    const resources = path.join(EXE_DIR, 'resources')
+    platform('win32', resources)
+    const { configureAppPaths, resourcesDir, mihomoCorePath } = await import('./dirs')
+    configureAppPaths()
+    expect(paths.userData).toBe(path.join(APP_DATA, 'clash-momo'))
+    expect(resourcesDir()).toBe(resources)
+    expect(mihomoCorePath()).toBe(path.join(resources, 'sidecar', 'mihomomo.exe'))
+  })
+
+  it('keeps portable Windows settings and history beside the executable', async () => {
+    packaged = true
+    portable = true
+    platform('win32')
+    const { configureAppPaths, dataDir, trafficUsageDatabasePath } = await import('./dirs')
+    configureAppPaths()
+    expect(dataDir()).toBe(path.join(EXE_DIR, 'data'))
+    expect(trafficUsageDatabasePath()).toBe(path.join(EXE_DIR, 'data', 'traffic-usage.db'))
   })
 })

@@ -4,8 +4,7 @@ import { createHash } from 'crypto'
 import { readFile, writeFile, rename, rm } from 'fs/promises'
 import path from 'path'
 import axios from 'axios'
-import { mihomoCorePath, mihomoWorkDir, resourcesFilesDir } from '../utils/dirs'
-import { tiziTestBuild } from '../../shared/test-build'
+import { mihomoWorkDir, resourcesFilesDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
 import type { MacServiceStatus } from '../../shared/macos-service'
@@ -51,13 +50,9 @@ export async function macServiceRequest<T = unknown>(
 }
 
 export async function validateMacCore(): Promise<void> {
-  const { stdout } = await execFileAsync(
-    tiziTestBuild() ? mihomoCorePath() : MAC_FORMULA_CORE,
-    ['--momo-capabilities'],
-    {
-      timeout: 5000
-    }
-  )
+  const { stdout } = await execFileAsync(MAC_FORMULA_CORE, ['--momo-capabilities'], {
+    timeout: 5000
+  })
   const capability = JSON.parse(stdout)
   if (
     capability.protocol !== 1 ||
@@ -77,7 +72,6 @@ function supportedVersion(version: unknown): boolean {
 }
 
 export async function macServiceStatus(): Promise<MacServiceStatus> {
-  if (tiziTestBuild()) return { installed: false, compatible: false }
   if (process.platform !== 'darwin') return { installed: false, compatible: false }
   try {
     const status = await macServiceRequest<MacServiceStatus>('/v1/status', undefined, 2000)
@@ -114,7 +108,6 @@ export function setMacServiceTransition(callback: () => Promise<void>): void {
 }
 
 export async function connectMacService(): Promise<boolean> {
-  if (tiziTestBuild()) return false
   if (process.platform !== 'darwin') return false
   const status = await macServiceStatus()
   if (!status.installed) return false
@@ -205,7 +198,6 @@ async function privilegedCommand(args: string[]): Promise<void> {
 }
 
 export async function installMacService(): Promise<void> {
-  if (tiziTestBuild()) throw new Error('团购测试版使用独立内核，不安装或连接现有特权服务。')
   if (process.platform !== 'darwin')
     throw new Error('macOS service is unavailable on this platform')
   if (installPending) return installPending
@@ -255,7 +247,6 @@ export async function stopMacServiceCore(release = false): Promise<void> {
 }
 
 export async function uninstallMacService(): Promise<void> {
-  if (tiziTestBuild()) throw new Error('团购测试版不管理现有特权服务。')
   if (process.platform !== 'darwin')
     throw new Error('macOS service is unavailable on this platform')
   const { stopCore, restartCore } = await import('./manager')

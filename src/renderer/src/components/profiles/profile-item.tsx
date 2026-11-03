@@ -76,7 +76,6 @@ const ProfileItem: React.FC<Props> = (props) => {
   const [clickStartPos, setClickStartPos] = useState<{ x: number; y: number } | null>(null)
 
   const menuItems: MenuItem[] = useMemo(() => {
-    if (info.type === 'managed') return []
     const list = [
       {
         key: 'edit-info',
@@ -145,7 +144,6 @@ const ProfileItem: React.FC<Props> = (props) => {
   }, [info, t, simpleMode])
 
   const onMenuAction = async (key: Key): Promise<void> => {
-    if (info.type === 'managed') return
     switch (key) {
       case 'edit-info': {
         setOpenInfoEditor(true)
@@ -186,7 +184,7 @@ const ProfileItem: React.FC<Props> = (props) => {
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (info.type !== 'managed') setDropdownOpen(true)
+    setDropdownOpen(true)
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -317,30 +315,28 @@ const ProfileItem: React.FC<Props> = (props) => {
                   </Tooltip>
                 )}
 
-                {info.type !== 'managed' && (
-                  <Dropdown isOpen={dropdownOpen} onOpenChange={setDropdownOpen}>
-                    <DropdownTrigger>
-                      <Button isIconOnly size="sm" variant="light" color="default">
-                        <IoMdMore
-                          color="default"
-                          className={`text-[24px] ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`}
-                        />
-                      </Button>
-                    </DropdownTrigger>
-                    <DropdownMenu onAction={onMenuAction}>
-                      {menuItems.map((item) => (
-                        <DropdownItem
-                          showDivider={item.showDivider}
-                          key={item.key}
-                          color={item.color}
-                          className={item.className}
-                        >
-                          {item.label}
-                        </DropdownItem>
-                      ))}
-                    </DropdownMenu>
-                  </Dropdown>
-                )}
+                <Dropdown isOpen={dropdownOpen} onOpenChange={setDropdownOpen}>
+                  <DropdownTrigger>
+                    <Button isIconOnly size="sm" variant="light" color="default">
+                      <IoMdMore
+                        color="default"
+                        className={`text-[24px] ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`}
+                      />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownMenu onAction={onMenuAction}>
+                    {menuItems.map((item) => (
+                      <DropdownItem
+                        showDivider={item.showDivider}
+                        key={item.key}
+                        color={item.color}
+                        className={item.className}
+                      >
+                        {item.label}
+                      </DropdownItem>
+                    ))}
+                  </DropdownMenu>
+                </Dropdown>
               </div>
             }
           />

@@ -20,7 +20,6 @@ import {
   themesDir
 } from '../utils/dirs'
 import { getAppConfig } from '../config'
-import { assertConfigurationBackupAllowed, managedTiziActive } from '../tizi/policy'
 
 let backupCronJob: Cron | null = null
 
@@ -119,7 +118,6 @@ function createBackupZip(): AdmZip {
 }
 
 export async function webdavBackup(): Promise<boolean> {
-  await assertConfigurationBackupAllowed()
   const { client, webdavDir, webdavMaxBackups } = await getWebDAVClient()
   const zip = createBackupZip()
   const date = new Date()
@@ -132,7 +130,6 @@ export async function webdavBackup(): Promise<boolean> {
     // ignore
   }
 
-  await assertConfigurationBackupAllowed()
   const result = await client.putFileContents(`${webdavDir}/${zipFileName}`, zip.toBuffer())
 
   if (webdavMaxBackups > 0) {
@@ -170,23 +167,19 @@ export async function webdavBackup(): Promise<boolean> {
 }
 
 export async function webdavRestore(filename: string): Promise<void> {
-  await assertConfigurationBackupAllowed()
   const { client, webdavDir } = await getWebDAVClient()
   const zipData = await client.getFileContents(`${webdavDir}/${filename}`)
   const zip = new AdmZip(zipData as Buffer)
-  await assertConfigurationBackupAllowed()
   zip.extractAllTo(dataDir(), true)
 }
 
 export async function listWebdavBackups(): Promise<string[]> {
-  await assertConfigurationBackupAllowed()
   const { client, webdavDir } = await getWebDAVClient()
   const files = await client.getDirectoryContents(webdavDir, { glob: '*.zip' })
   return files.map((file) => file.basename)
 }
 
 export async function webdavDelete(filename: string): Promise<void> {
-  await assertConfigurationBackupAllowed()
   const { client, webdavDir } = await getWebDAVClient()
   await client.deleteFile(`${webdavDir}/${filename}`)
 }
@@ -202,15 +195,12 @@ export async function initWebdavBackupScheduler(): Promise<void> {
       backupCronJob = null
     }
 
-    const config = await getAppConfig()
-    if (managedTiziActive(config)) return
-    const { webdavBackupCron } = config
+    const { webdavBackupCron } = await getAppConfig()
 
     // 如果配置了 Cron 表达式，则启动定时任务
     if (webdavBackupCron) {
       backupCronJob = new Cron(webdavBackupCron, async () => {
         try {
-          if (managedTiziActive(await getAppConfig())) return
           await webdavBackup()
           await systemLogger.info('WebDAV backup completed successfully via cron job')
         } catch (error) {
@@ -254,7 +244,6 @@ export async function reinitScheduler(): Promise<void> {
  * 导出本地备份
  */
 export async function exportLocalBackup(): Promise<boolean> {
-  await assertConfigurationBackupAllowed()
   const zip = createBackupZip()
 
   const date = new Date()
@@ -269,7 +258,6 @@ export async function exportLocalBackup(): Promise<boolean> {
   })
 
   if (!result.canceled && result.filePath) {
-    await assertConfigurationBackupAllowed()
     zip.writeZip(result.filePath)
     await systemLogger.info(`Local backup exported to: ${result.filePath}`)
     return true
@@ -281,7 +269,6 @@ export async function exportLocalBackup(): Promise<boolean> {
  * 导入本地备份
  */
 export async function importLocalBackup(): Promise<boolean> {
-  await assertConfigurationBackupAllowed()
   const result = await dialog.showOpenDialog({
     title: i18next.t('localBackup.import.title'),
     filters: [
@@ -292,7 +279,6 @@ export async function importLocalBackup(): Promise<boolean> {
   })
 
   if (!result.canceled && result.filePaths.length > 0) {
-    await assertConfigurationBackupAllowed()
     const filePath = result.filePaths[0]
     const zip = new AdmZip(filePath)
     zip.extractAllTo(dataDir(), true)

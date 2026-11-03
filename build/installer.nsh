@@ -69,13 +69,7 @@ FunctionEnd
       SetShellVarContext current
     ${EndIf}
 
-    RMDir /r "$APPDATA\${APP_FILENAME}"
-    !ifdef APP_PRODUCT_FILENAME
-      RMDir /r "$APPDATA\${APP_PRODUCT_FILENAME}"
-    !endif
-    !ifdef APP_PACKAGE_NAME
-      RMDir /r "$APPDATA\${APP_PACKAGE_NAME}"
-    !endif
+    RMDir /r "$APPDATA\clash-momo"
 
     ${If} $installMode == "all"
       SetShellVarContext all

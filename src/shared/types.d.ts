@@ -283,7 +283,6 @@ interface ISmartModelStatus {
 }
 
 interface IAppConfig {
-  tiziActive?: boolean
   operationMode?: 'standard' | 'simple'
   modeSelected?: boolean
   core: 'mihomomo'
@@ -603,7 +602,7 @@ interface ISubscriptionUserInfo {
 
 interface IProfileItem {
   id: string
-  type: 'remote' | 'local' | 'plugin' | 'managed'
+  type: 'remote' | 'local' | 'plugin'
   name: string
   url?: string // remote
   file?: string // local

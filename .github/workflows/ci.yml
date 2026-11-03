@@ -81,3 +81,34 @@ jobs:
           name: clash-momo-macos
           path: dist/release/*
           if-no-files-found: error
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '26'
+          check-latest: true
+      - run: npm install --global pnpm@11.8.0
+      - name: Build, install and exercise the bundled Windows client
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./packaging/windows/build-ci.ps1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: clash-momo-windows
+          path: dist/release/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: failure()
+        with:
+          name: clash-momo-windows-diagnostics
+          path: |
+            ${{ runner.temp }}/clash-momo-windows-smoke/**/data/logs/*
+            ${{ env.APPDATA }}/clash-momo/logs/*
+          if-no-files-found: ignore

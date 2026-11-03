@@ -8,7 +8,6 @@ import { getRuntimeConfigStr } from '../core/factory'
 import { encryptAgeContent, generateAgeKeyPair } from '../utils/age'
 import { createLogger } from '../utils/logger'
 import { atomicWriteFile } from '../utils/safeFile'
-import { assertConfigurationBackupAllowed, managedTiziActive } from '../tizi/policy'
 
 interface GistInfo {
   id: string
@@ -109,7 +108,6 @@ async function updateGist(token: string, id: string, content: string): Promise<v
 }
 
 export async function getGistUrl(): Promise<string> {
-  await assertConfigurationBackupAllowed()
   const { githubToken } = await getAppConfig()
   if (!githubToken) return ''
   const gists = await listGists(githubToken)
@@ -126,7 +124,6 @@ export async function getGistUrl(): Promise<string> {
 }
 
 async function uploadRuntimeConfigContent(runtimeConfig: string): Promise<boolean> {
-  await assertConfigurationBackupAllowed()
   const { githubToken, gistAgeEncrypt = false, gistAgeRecipient } = await getAppConfig()
   if (!githubToken) return false
   const gists = await listGists(githubToken)
@@ -143,7 +140,6 @@ async function uploadRuntimeConfigContent(runtimeConfig: string): Promise<boolea
 }
 
 export async function uploadRuntimeConfig(): Promise<void> {
-  await assertConfigurationBackupAllowed()
   const runtimeConfig = await getRuntimeConfigStr()
   const runtimeConfigHash = hashRuntimeConfig(runtimeConfig)
   uploadingRuntimeConfigHash = runtimeConfigHash
@@ -160,7 +156,6 @@ export async function uploadRuntimeConfig(): Promise<void> {
 }
 
 export async function uploadRuntimeConfigIfChanged(): Promise<void> {
-  if (managedTiziActive(await getAppConfig())) return
   const runtimeConfig = await getRuntimeConfigStr()
   const runtimeConfigHash = hashRuntimeConfig(runtimeConfig)
   if (
@@ -207,7 +202,6 @@ export async function generateGistAgeKeyPair(): Promise<GistAgeKeyPair> {
 }
 
 export async function exportGistAgeSecretKey(): Promise<boolean> {
-  await assertConfigurationBackupAllowed()
   const { gistAgeSecretKey } = await getAppConfig()
   if (!gistAgeSecretKey) {
     throw new Error('Gist Age private key has not been generated')

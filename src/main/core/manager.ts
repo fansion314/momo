@@ -27,7 +27,6 @@ import {
 import { uploadRuntimeConfigIfChanged } from '../resolve/gistApi'
 import { ensureRuntimeFiles } from '../utils/init'
 import { parseAgeSecretKeys } from '../utils/age'
-import { managedTiziActive } from '../tizi/policy'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
 import { createCoreLogWritableStream } from '../utils/logFile'
@@ -123,7 +122,7 @@ let resumeReloadTimer: NodeJS.Timeout | null = null
 // 文件监听器
 let coreWatcherInitialized = false
 
-type CoreStartupMode = 'log' | 'post-up' | 'api'
+type CoreStartupMode = 'log' | 'post-up'
 
 interface CoreStartupHook {
   hookDir: string
@@ -246,14 +245,10 @@ function shellQuote(value: string): string {
 }
 
 function hookTouchCommand(file: string): string {
-  return process.platform === 'win32' ? `type nul > ${file}` : `: > ${shellQuote(file)}`
+  return process.platform === 'win32' ? `type nul > "${file}"` : `: > ${shellQuote(file)}`
 }
 
 function coreHookDir(): string {
-  if (process.platform === 'win32' && process.env.ProgramData) {
-    return path.join(process.env.ProgramData, 'clash-momo', 'core-hooks')
-  }
-
   return path.join(dataDir(), 'core-hooks')
 }
 
@@ -449,7 +444,7 @@ function buildCoreEnv(safePath?: string, ageSecretKey?: string): NodeJS.ProcessE
 }
 
 // 准备核心配置
-export async function prepareCore(detached: boolean, skipStop = false): Promise<CoreConfig> {
+async function prepareCore(detached: boolean, skipStop = false): Promise<CoreConfig> {
   await ensureRuntimeFiles()
   if (process.platform === 'darwin') {
     await validateMacCore()
@@ -466,7 +461,7 @@ export async function prepareCore(detached: boolean, skipStop = false): Promise<
     coreStartupMode = 'log',
     testProfileOnStart = true
   } = appConfig
-  if (appConfig.operationMode === 'simple' || managedTiziActive(appConfig)) diffWorkDir = false
+  if (appConfig.operationMode === 'simple') diffWorkDir = false
 
   let { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
 
@@ -484,12 +479,7 @@ export async function prepareCore(detached: boolean, skipStop = false): Promise<
     tun = simpleRuntime.tun
   }
   const ageSecretKey = (await getProfileItem(current))?.ageSecretKey || ''
-  // The ordinary user cannot read the helper-owned encrypted account state.
-  // applySnapshot always validates the actual snapshot with root --momo-managed -t
-  // before start/reload; this preference must never bypass that mandatory check.
-  const helperValidatesManagedProfile =
-    process.platform === 'darwin' && isMacServiceActive() && managedTiziActive(appConfig)
-  if (testProfileOnStart && !helperValidatesManagedProfile) {
+  if (testProfileOnStart) {
     await checkProfile(current, core, diffWorkDir, ageSecretKey)
   }
   if (!skipStop && hasCoreProcess()) {
@@ -516,11 +506,7 @@ export async function prepareCore(detached: boolean, skipStop = false): Promise<
     await validateWindowsPipeAccess(ipcPath)
   }
 
-  const startupMode: CoreStartupMode = managedTiziActive(appConfig)
-    ? 'api'
-    : coreStartupMode === 'post-up'
-      ? 'post-up'
-      : 'log'
+  const startupMode: CoreStartupMode = coreStartupMode === 'post-up' ? 'post-up' : 'log'
   const startupHook =
     !isMacServiceActive() && !detached && startupMode === 'post-up'
       ? await createCoreStartupHook()
@@ -566,6 +552,7 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
   }
 
   const proc = spawn(corePath, args, {
+    windowsHide: true,
     detached,
     stdio: detached ? 'ignore' : undefined,
     env: buildCoreEnv(safePath, ageSecretKey)
@@ -599,7 +586,7 @@ function setupCoreListeners(
   const { logLevel, startupMode } = config
   let startupSettled = false
   const startupTimer =
-    startupMode !== 'post-up'
+    startupMode === 'log'
       ? setTimeout(() => {
           rejectStartup(new Error(`Timed out waiting for core API readiness: ${coreHookTimeout}ms`))
         }, coreHookTimeout)
@@ -625,10 +612,7 @@ function setupCoreListeners(
   }
 
   const startMihomoApiStreams = async (): Promise<void> => {
-    await waitForCoreReady(
-      startupMode === 'api' ? coreHookTimeout : undefined,
-      startupMode === 'api'
-    )
+    await waitForCoreReady()
     await getAxios(true)
     await Promise.all([
       startMihomoTraffic(),
@@ -645,7 +629,7 @@ function setupCoreListeners(
       managerLogger.warn('Failed to sync runtime config to Gist', error)
     }
     try {
-      if (startupMode !== 'api') await patchMihomoConfig({ 'log-level': logLevel })
+      await patchMihomoConfig({ 'log-level': logLevel })
     } finally {
       mainWindow?.webContents.send('groupsUpdated')
       mainWindow?.webContents.send('rulesUpdated')
@@ -756,7 +740,7 @@ function setupCoreListeners(
       return
     }
 
-    if (startupMode !== 'log') {
+    if (startupMode === 'post-up') {
       return
     }
 
@@ -790,11 +774,7 @@ function setupCoreListeners(
     }
   })
 
-  if (startupMode === 'api') {
-    void startMihomoApiStreams()
-      .then(() => resolveStartup([completeCoreStartup()]))
-      .catch(rejectStartup)
-  } else if (startupMode === 'post-up') {
+  if (startupMode === 'post-up') {
     if (!hookWaiter) {
       rejectStartup(new Error('Core post-up startup mode requires a startup hook'))
       return

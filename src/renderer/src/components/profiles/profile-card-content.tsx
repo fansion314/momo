@@ -33,7 +33,7 @@ const ProfileCardContent: React.FC<Props> = (props) => {
           </h3>
           {actions}
         </div>
-        {(info.type === 'remote' || info.type === 'managed') && extra && (
+        {info.type === 'remote' && extra && (
           <div
             className={`mt-2 flex justify-between ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`}
           >
@@ -66,20 +66,7 @@ const ProfileCardContent: React.FC<Props> = (props) => {
           </div>
         )}
       </CardBody>
-      <CardFooter className="pt-0 flex-col items-start gap-2">
-        {info.type === 'managed' && (
-          <Chip
-            size="sm"
-            variant="bordered"
-            className={
-              isCurrent
-                ? 'text-primary-foreground border-primary-foreground'
-                : 'border-primary text-primary'
-            }
-          >
-            受保护 · 只读订阅
-          </Chip>
-        )}
+      <CardFooter className="pt-0">
         {info.type === 'remote' && !extra && (
           <div
             className={`w-full mt-2 flex justify-between ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`}

@@ -33,8 +33,6 @@ type service struct {
 	generation       uint64
 	operationCancel  context.CancelFunc
 	operationContext context.Context
-	tiziOperations   map[uint64]context.CancelFunc
-	tiziSequence     uint64
 	cmd              *exec.Cmd
 	identity         string
 	done             chan struct{}
@@ -210,9 +208,6 @@ func (s *service) expireLease(now time.Time) {
 		if s.operationCancel != nil {
 			s.operationCancel()
 		}
-		for _, cancel := range s.tiziOperations {
-			cancel()
-		}
 	}
 	s.authMu.Unlock()
 	if expired {
@@ -268,10 +263,6 @@ func (s *service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, map[string]bool{"ok": true, "running": s.running.Load()})
 		return
 	}
-	if r.Method == http.MethodPost && r.URL.Path == "/v1/tizi/action" {
-		s.serveTiziAction(w, r)
-		return
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r.Method == http.MethodGet && r.URL.Path == "/v1/status" {
@@ -289,9 +280,6 @@ func (s *service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if s.token != "" && time.Since(s.lease) <= 10*time.Second {
 			http.Error(w, "an application session is already active", 409)
 			return
-		}
-		for _, cancel := range s.tiziOperations {
-			cancel()
 		}
 		if err := s.stopCore(); err != nil {
 			http.Error(w, "cannot stop previous core", 503)

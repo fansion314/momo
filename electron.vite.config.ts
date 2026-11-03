@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 // https://github.com/vdesjs/vite-plugin-monaco-editor/issues/21#issuecomment-1827562674
 import monacoEditorPluginModule from 'vite-plugin-monaco-editor'
-import { resolveTiziBuildFeatures } from './src/shared/build-features'
 const isObjectWithDefaultFunction = (
   module: unknown
 ): module is { default: typeof monacoEditorPluginModule } =>
@@ -18,24 +17,17 @@ const monacoEditorPlugin = isObjectWithDefaultFunction(monacoEditorPluginModule)
 
 // Win7 build: bundle all deps (Vite converts ESM→CJS), only externalize native modules
 const isLegacyBuild = process.env.LEGACY_BUILD === 'true'
-const { tiziEnabled, tiziTestBuild } = resolveTiziBuildFeatures(process.env)
-const buildDefines = {
-  __LEGACY_BUILD__: JSON.stringify(isLegacyBuild),
-  __TIZI_ENABLED__: JSON.stringify(tiziEnabled),
-  __TIZI_TEST_BUILD__: JSON.stringify(tiziTestBuild)
-}
 const legacyExternal = ['sysproxy-rs', 'electron', 'utf-8-validate', 'bufferutil']
 
 export default defineConfig({
   main: {
-    define: buildDefines,
+    define: { __LEGACY_BUILD__: JSON.stringify(isLegacyBuild) },
     plugins: isLegacyBuild ? [] : [externalizeDepsPlugin()],
     build: isLegacyBuild
       ? { rollupOptions: { external: legacyExternal, output: { format: 'cjs' } } }
       : undefined
   },
   preload: {
-    define: buildDefines,
     plugins: isLegacyBuild ? [] : [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
@@ -48,7 +40,7 @@ export default defineConfig({
     }
   },
   renderer: {
-    define: buildDefines,
+    define: { __LEGACY_BUILD__: JSON.stringify(isLegacyBuild) },
     build: {
       rollupOptions: {
         input: {

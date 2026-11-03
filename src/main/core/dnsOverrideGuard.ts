@@ -3,7 +3,6 @@ import { getAppConfig, getProfile, getProfileConfig, syncAppConfigAfterApply } f
 import { mainWindow } from '../window'
 import { createLogger } from '../utils/logger'
 import { DEFAULT_CONTROL_DNS } from '../../shared/appConfig'
-import { TIZI_PROFILE_ID } from '../../shared/tizi'
 
 const guardLogger = createLogger('DnsOverrideGuard')
 
@@ -169,7 +168,6 @@ export async function takeDnsOverrideAutoDisabledNotice(): Promise<boolean> {
 
 async function inspectCurrentProfileDns(): Promise<string | null> {
   const { current } = await getProfileConfig(true)
-  if (current === TIZI_PROFILE_ID) return null
   const fields = detectProfileDns(await getProfile(current))
   return fields ? profileDnsFingerprint(current ?? 'default', fields) : null
 }

@@ -2,7 +2,6 @@ import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
 import { is } from '@electron-toolkit/utils'
 import { app } from 'electron'
-import { tiziTestBuild } from '../../shared/test-build'
 
 export const homeDir = app.getPath('home')
 
@@ -12,17 +11,18 @@ export function isPortable(): boolean {
 
 // Keep development and production isolated from each other and from upstream Party.
 export function isSystemInstall(): boolean {
-  return path.resolve(app.getAppPath()) === '/usr/lib/clash-momo'
+  return process.platform === 'linux' && path.resolve(app.getAppPath()) === '/usr/lib/clash-momo'
 }
 
 export function configureAppPaths(): void {
-  const name = tiziTestBuild()
-    ? 'clash-momo-tizi-test'
-    : isSystemInstall() || app.isPackaged
-      ? 'clash-momo'
-      : 'clash-momo-dev'
+  const name = isSystemInstall() || app.isPackaged ? 'clash-momo' : 'clash-momo-dev'
   app.setName(name)
-  app.setPath('userData', path.join(app.getPath('appData'), name))
+  app.setPath(
+    'userData',
+    process.platform === 'win32' && isPortable()
+      ? path.join(exeDir(), 'data')
+      : path.join(app.getPath('appData'), name)
+  )
 }
 
 export function dataDir(): string {
@@ -56,7 +56,7 @@ export function exePath(): string {
 
 export function resourcesDir(): string {
   if (isSystemInstall()) return '/usr/lib/clash-momo/resources'
-  if (process.platform === 'darwin' && app.isPackaged) return process.resourcesPath
+  if (app.isPackaged) return process.resourcesPath
   if (is.dev) {
     return path.join(__dirname, '../../extra')
   } else {
@@ -77,13 +77,13 @@ export function themesDir(): string {
 }
 
 export function mihomoCoreDir(): string {
-  if (tiziTestBuild() && process.platform === 'darwin' && app.isPackaged) return resourcesFilesDir()
+  if (process.platform === 'win32') return path.join(resourcesDir(), 'sidecar')
   return process.platform === 'darwin' ? '/opt/homebrew/opt/mihomomo/bin' : '/usr/bin'
 }
 
-// A single system-owned core. Legacy arguments are accepted only for old callers.
+// One paired core; Windows bundles it, while Unix uses the system package.
 export function mihomoCorePath(_core?: string): string {
-  return path.join(mihomoCoreDir(), tiziTestBuild() ? 'mihomomo-tizi' : 'mihomomo')
+  return path.join(mihomoCoreDir(), process.platform === 'win32' ? 'mihomomo.exe' : 'mihomomo')
 }
 
 export function appConfigPath(): string {

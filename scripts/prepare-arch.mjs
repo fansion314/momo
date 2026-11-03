@@ -1,10 +1,18 @@
 // Pinned public release assets; hashes deliberately fail closed if upstream replaces an asset.
 import { createHash } from 'node:crypto'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
-import { execFileSync } from 'node:child_process'
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
+import AdmZip from 'adm-zip'
+
+// 2026-11-02 upstream release tree; immutable content URLs avoid latest asset repacks.
+// All six SHA-256 values were checked against the upstream Release API digests.
+const geoCommit = '1234686cec4ff41207931ee441a13ea4e26ebf13'
 
 const platform = process.env.MOMO_RESOURCE_PLATFORM || `${process.platform}-${process.arch}`
 const nativeAssets = {
+  'win32-x64': [
+    'sysproxy.win32-x64-msvc.node',
+    'f292cf74413c8eaaf9d6d6ed95eec110226394f9a6c11ec00a749a830ddf7217'
+  ],
   'linux-x64': [
     'sysproxy.linux-x64-gnu.node',
     '665048e01326bb71cc2059223cb107057ab744f09674cc711193e10eaf416f18'
@@ -46,12 +54,12 @@ const assets = [
     [
       'geoip.metadb',
       'geoip.metadb',
-      'd49315d3fce861e014d6fda9aaca6d83a5b20e6f682f0bcee71a41afad047673'
+      'c54a1704ee3e245bec1cb65c2e2948311eeee532e2ea1eed09322425d28775be'
     ],
     [
       'geosite.dat',
       'geosite.dat',
-      'b4d3807aa45b4f5532ae236672f244a562452622483c0b489c63dd2aadaa821f'
+      '7297bf574a563aed8a69528e1f3a2bb275911fb83ebe3082494213d97ab09deb'
     ],
     ['geoip.dat', 'geoip.dat', 'fbf747a085be25eb61ecac8c27140b4ab0bf8181af6fdb104caa325bd93cf117'],
     [
@@ -62,11 +70,11 @@ const assets = [
     [
       'BundleMRS.7z',
       'BundleMRS.7z',
-      '9f566c14d4953f702ddda484a5052221c2c52ddaff494818c0b0556010f5e318'
+      '8f3208c5240732816bc73ec5db5c9828e6cedeeb47898aa9fc5bfd2e4b85164c'
     ]
   ].map(([file, name, hash]) => [
     `extra/files/${file}`,
-    `https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/${name}`,
+    `https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/${geoCommit}/${name}`,
     hash
   ])
 ]
@@ -81,10 +89,5 @@ for (const [file, url, expected] of assets) {
   await writeFile(file, bytes)
 }
 await mkdir('extra/files/sub-store-frontend', { recursive: true })
-execFileSync('unzip', [
-  '-oq',
-  'node_modules/.temp/substore.zip',
-  '-d',
-  'node_modules/.temp/substore'
-])
-execFileSync('cp', ['-a', 'node_modules/.temp/substore/dist/.', 'extra/files/sub-store-frontend/'])
+new AdmZip('node_modules/.temp/substore.zip').extractAllTo('node_modules/.temp/substore', true)
+await cp('node_modules/.temp/substore/dist', 'extra/files/sub-store-frontend', { recursive: true })

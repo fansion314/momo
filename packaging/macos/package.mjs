@@ -13,13 +13,8 @@ const pkg = JSON.parse(await readFile('package.json', 'utf8'))
 const release = JSON.parse(await readFile('packaging/macos/release.json', 'utf8'))
 const run = (program, args, options = {}) =>
   execFileSync(program, args, { stdio: 'inherit', ...options })
-const testBuild = process.env.MOMO_TIZI_TEST_BUILD === 'true'
-if (testBuild && (process.env.MOMO_TIZI_ENABLED !== 'true' || !process.env.MOMO_TIZI_TEST_CORE))
-  throw new Error('The isolated test package requires tizi support and a paired native core')
-const appName = testBuild ? 'Clash Momo Tizi Test' : 'Clash Momo'
-const appId = testBuild ? 'world.fansionia.clash-momo.tizi-test' : 'world.fansionia.clash-momo'
-const dist = path.join(root, testBuild ? 'dist/macos-tizi-test' : 'dist/macos')
-const app = path.join(dist, `${appName}.app`)
+const dist = path.join(root, 'dist/macos')
+const app = path.join(dist, 'Clash Momo.app')
 await rm(dist, { recursive: true, force: true })
 await mkdir(dist, { recursive: true })
 const electronDir = path.dirname(require.resolve('electron/package.json'))
@@ -28,7 +23,7 @@ const contents = path.join(app, 'Contents')
 const resources = path.join(contents, 'Resources')
 // Electron determines app.isPackaged from the executable basename, including
 // helper processes. Rename the complete bundle family before signing it.
-await rename(path.join(contents, 'MacOS/Electron'), path.join(contents, 'MacOS', appName))
+await rename(path.join(contents, 'MacOS/Electron'), path.join(contents, 'MacOS/Clash Momo'))
 for (const [directory, suffix, identifier] of [
   ['Frameworks', ' Helper', 'helper'],
   ['Frameworks', ' Helper (Renderer)', 'helper'],
@@ -39,7 +34,7 @@ for (const [directory, suffix, identifier] of [
   ['Library/LoginItems', ' Login Helper', 'loginhelper']
 ]) {
   const oldName = `Electron${suffix}`
-  const newName = `${appName}${suffix}`
+  const newName = `Clash Momo${suffix}`
   const oldBundle = path.join(contents, directory, `${oldName}.app`)
   try {
     await access(oldBundle)
@@ -55,9 +50,9 @@ for (const [directory, suffix, identifier] of [
   )
   Object.assign(helperInfo, {
     CFBundleExecutable: newName,
-    CFBundleName: suffix === ' Helper' ? appName : newName,
+    CFBundleName: suffix === ' Helper' ? 'Clash Momo' : newName,
     CFBundleDisplayName: newName,
-    CFBundleIdentifier: `${appId}.${identifier}`,
+    CFBundleIdentifier: `world.fansionia.clash-momo.${identifier}`,
     CFBundleShortVersionString: pkg.version,
     CFBundleVersion: pkg.version
   })
@@ -96,15 +91,13 @@ run(
     cwd: path.join(root, 'packaging/macos/helper')
   }
 )
-if (testBuild)
-  await cp(process.env.MOMO_TIZI_TEST_CORE, path.join(resources, 'files/mihomomo-tizi'))
 const infoPath = path.join(contents, 'Info.plist')
 const info = parse(await readFile(infoPath, 'utf8'))
 Object.assign(info, {
-  CFBundleIdentifier: appId,
-  CFBundleExecutable: appName,
-  CFBundleName: appName,
-  CFBundleDisplayName: appName,
+  CFBundleIdentifier: 'world.fansionia.clash-momo',
+  CFBundleExecutable: 'Clash Momo',
+  CFBundleName: 'Clash Momo',
+  CFBundleDisplayName: 'Clash Momo',
   CFBundleShortVersionString: pkg.version,
   CFBundleVersion: pkg.version,
   MomoPackageRevision: release.revision,
@@ -120,10 +113,6 @@ Object.assign(info, {
     }
   ]
 })
-if (testBuild) {
-  delete info.CFBundleURLTypes
-  delete info.CFBundleDocumentTypes
-}
 delete info.ElectronAsarIntegrity
 await writeFile(infoPath, build(info))
 run('python3', ['packaging/macos/sign.py', app, path.join(root, 'build/entitlements.mac.plist')])

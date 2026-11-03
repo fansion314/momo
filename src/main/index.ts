@@ -266,7 +266,6 @@ async function ensureNoHighPrivilegeCore(isAdmin: boolean): Promise<boolean> {
         app.exit(0)
       } catch (error) {
         safeShowErrorBox('common.error.adminRequired', `${error}`)
-        app.exit(1)
       }
     } else {
       app.exit(0)
@@ -281,11 +280,7 @@ async function ensureNoHighPrivilegeCore(isAdmin: boolean): Promise<boolean> {
 app
   .whenReady()
   .then(async () => {
-    electronApp.setAppUserModelId(
-      typeof __TIZI_TEST_BUILD__ !== 'undefined' && __TIZI_TEST_BUILD__
-        ? 'world.fansionia.clash-momo.tizi-test'
-        : 'world.fansionia.clash-momo'
-    )
+    electronApp.setAppUserModelId('world.fansionia.clash-momo')
 
     const { appConfig, adminPromise } = await initPromise
     beginCoreInitialization()

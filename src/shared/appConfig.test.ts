@@ -23,6 +23,18 @@ describe('window zoom', () => {
 })
 
 describe('system runtime config migration', () => {
+  it('ignores retired managed activation while preserving ordinary preferences', () => {
+    const config = normalizeRuntimeAppConfig({
+      tiziActive: true,
+      controlDns: false,
+      trafficHistoryRetentionDays: 180,
+      operationMode: 'standard'
+    } as unknown as IAppConfig)
+    expect(config).not.toHaveProperty('tiziActive')
+    expect(config.controlDns).toBe(false)
+    expect(config.trafficHistoryRetentionDays).toBe(180)
+    expect(config.operationMode).toBe('standard')
+  })
   it.each(['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific'])(
     'migrates %s to the system Smart core without changing the override preference',
     (core) => {

@@ -667,14 +667,14 @@ const Profiles: React.FC = () => {
                 {sortedItems.map((item) => (
                   <ProfileItem
                     key={item.id}
-                    isCurrent={(!simpleMode || item.type === 'managed') && item.id === current}
+                    isCurrent={!simpleMode && item.id === current}
                     addProfileItem={addProfileItem}
                     removeProfileItem={removeProfileItem}
                     mutateProfileConfig={mutateProfileConfig}
                     updateProfileItem={updateProfileItem}
                     info={item}
                     onPress={
-                      simpleMode && item.type !== 'managed'
+                      simpleMode
                         ? undefined
                         : async () => {
                             await changeCurrentProfile(item.id)

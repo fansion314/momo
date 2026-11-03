@@ -28,8 +28,6 @@ interface SsidProfileEntry {
 const MihomoConfig: React.FC = () => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
-  const backupDisabled =
-    typeof __TIZI_ENABLED__ !== 'undefined' && __TIZI_ENABLED__ && appConfig?.tiziActive === true
   const { profileConfig } = useProfileConfig()
   const { items: profileItems = [] } = profileConfig || {}
   const {
@@ -252,16 +250,10 @@ const MihomoConfig: React.FC = () => {
           }}
         />
       </SettingItem>
-      {backupDisabled && (
-        <p role="status" className="px-2 py-2 text-sm text-warning">
-          团购订阅使用期间已停用 Gist 配置同步与导出，原有设置保留。
-        </p>
-      )}
       <SettingItem
         title={t('mihomo.gist.title')}
         actions={
           <Button
-            isDisabled={backupDisabled}
             title={t('mihomo.gist.copyUrl')}
             isIconOnly
             size="sm"
@@ -283,7 +275,6 @@ const MihomoConfig: React.FC = () => {
         divider
       >
         <Input
-          isDisabled={backupDisabled}
           type="password"
           size="sm"
           className="w-[60%]"
@@ -306,7 +297,6 @@ const MihomoConfig: React.FC = () => {
         divider
       >
         <Switch
-          isDisabled={backupDisabled}
           size="sm"
           isSelected={gistAgeEncrypt}
           onValueChange={(v) => {
@@ -320,7 +310,7 @@ const MihomoConfig: React.FC = () => {
           className="w-[60%]"
           value={gistAgeRecipient}
           placeholder={t('mihomo.gist.ageRecipientPlaceholder')}
-          isDisabled={backupDisabled || !gistAgeEncrypt}
+          isDisabled={!gistAgeEncrypt}
           onValueChange={(v) => {
             patchAppConfig({ gistAgeRecipient: v })
           }}
@@ -331,7 +321,6 @@ const MihomoConfig: React.FC = () => {
           <Button
             size="sm"
             variant="flat"
-            isDisabled={backupDisabled}
             isLoading={isGeneratingGistAgeKey}
             startContent={<BiKey className="text-base" />}
             onPress={handleGenerateGistAgeKeyPair}
@@ -341,7 +330,7 @@ const MihomoConfig: React.FC = () => {
           <Button
             size="sm"
             variant="flat"
-            isDisabled={backupDisabled || !gistAgeSecretKey}
+            isDisabled={!gistAgeSecretKey}
             isLoading={isExportingGistAgeKey}
             startContent={<BiDownload className="text-base" />}
             onPress={handleExportGistAgeSecretKey}
@@ -354,7 +343,7 @@ const MihomoConfig: React.FC = () => {
               isIconOnly
               size="sm"
               variant="light"
-              isDisabled={backupDisabled || !gistAgeSecretKey}
+              isDisabled={!gistAgeSecretKey}
               onPress={handleCopyGistAgeSecretKey}
             >
               <BiCopy className="text-lg" />

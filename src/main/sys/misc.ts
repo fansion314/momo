@@ -13,7 +13,6 @@ import {
   resourcesDir
 } from '../utils/dirs'
 import { checkAdminPrivileges } from '../core/admin'
-import { TIZI_PROFILE_ID } from '../../shared/tizi'
 
 export function getFilePath(
   ext: string[],
@@ -56,7 +55,6 @@ export async function readImageFileDataURL(filePath: string): Promise<string> {
 }
 
 export function openFile(type: 'profile' | 'override', id: string, ext?: 'yaml' | 'js'): void {
-  if (id === TIZI_PROFILE_ID) throw new Error('团购订阅为受保护配置，不能打开原始配置文件。')
   if (type === 'profile') {
     shell.openPath(profilePath(id))
   }
