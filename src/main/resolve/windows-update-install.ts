@@ -81,7 +81,9 @@ try {
     try { $inputFile.CopyTo($outputFile) } finally { $outputFile.Dispose() }
   } finally { $inputFile.Dispose() }
   if ((Get-Item -LiteralPath $protected).Length -ne $payload.size) { throw 'Protected update size changed' }
-  $actual = (Get-FileHash -LiteralPath $protected -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+  $sha = [Security.Cryptography.SHA256]::Create()
+  $verifiedFile = [IO.File]::OpenRead($protected)
+  try { $actual = [BitConverter]::ToString($sha.ComputeHash($verifiedFile)).Replace('-', '').ToLowerInvariant() } finally { $verifiedFile.Dispose(); $sha.Dispose() }
   if ($actual -ne $payload.sha256) { throw 'Protected update checksum changed' }
   $receiptWriter.WriteLine('{"status":"ready"}')
   if (Get-Process -Id ${parentPid} -ErrorAction SilentlyContinue) {

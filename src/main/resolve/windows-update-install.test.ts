@@ -24,13 +24,11 @@ describe('Windows update elevation launcher', () => {
     const launcher = decodeGeneratedCommand(encoded || '')
     expect(command.args.join(' ').length).toBeLessThan(20000)
     expect(launcher).toContain('Wait-Process -Id 1234 -Timeout 60')
-    expect(launcher).toContain('Get-FileHash -LiteralPath')
+    expect(launcher).toContain('[Security.Cryptography.SHA256]::Create()')
     expect(launcher).toContain('SetAccessRuleProtection($true, $false)')
     expect(launcher).toContain("'S-1-5-32-544'")
     expect(launcher).toContain('[IO.FileMode]::CreateNew')
-    expect(launcher.indexOf('Get-FileHash')).toBeLessThan(
-      launcher.indexOf('\'{"status":"ready"}\'')
-    )
+    expect(launcher.indexOf('ComputeHash')).toBeLessThan(launcher.indexOf('\'{"status":"ready"}\''))
     expect(launcher).not.toContain(executable)
     const payload = launcher.match(/FromBase64String\('([A-Za-z0-9+/=]+)'\)/)?.[1]
     expect(JSON.parse(Buffer.from(payload || '', 'base64').toString('utf8'))).toMatchObject({
