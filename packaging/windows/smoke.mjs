@@ -105,6 +105,8 @@ async function launch() {
     'History readiness'
   )
   const actualDataDir = await application.evaluate(({ app }) => app.getPath('userData'))
+  // Playwright launches through cmd.exe on Windows; process().pid is that shell.
+  const appPid = await application.evaluate(() => process.pid)
   assert.equal(
     path.resolve(actualDataDir),
     path.resolve(installed ? dataDir : path.join(appDir, 'data'))
@@ -112,6 +114,11 @@ async function launch() {
   const version = await invoke(page, 'mihomoVersion')
   assert.match(JSON.stringify(version), /1\.19\.33/)
   const corePath = path.join(appDir, 'resources/sidecar/mihomomo.exe')
+  assert.equal(
+    await readFile(path.join(appDir, 'resources/files/licenses/clash-momo.txt'), 'utf8'),
+    await readFile('LICENSE', 'utf8'),
+    'Both Windows packages must include the complete client license'
+  )
   const manifest = JSON.parse(
     await readFile(path.join(appDir, 'resources/files/mihomomo-manifest.json'), 'utf8')
   )
@@ -137,10 +144,9 @@ async function launch() {
   assert(
     processes.some(
       (p) =>
-        p.ExecutablePath?.toLowerCase() === corePath.toLowerCase() &&
-        p.ParentProcessId === application.process().pid
+        p.ExecutablePath?.toLowerCase() === corePath.toLowerCase() && p.ParentProcessId === appPid
     ),
-    'Actual app must launch its bundled core'
+    `Actual app must launch its bundled core: ${JSON.stringify({ appPid, corePath, processes })}`
   )
   return page
 }

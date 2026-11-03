@@ -7,7 +7,10 @@ module.exports = {
   executableName: 'Clash Momo',
   directories: { buildResources: 'build', output: 'dist/windows' },
   files: ['out/**', 'resources/**', 'package.json', '!resources/extra/**'],
-  extraResources: [{ from: 'extra', to: '', filter: ['files/**', 'sidecar/**'] }],
+  extraResources: [
+    { from: 'extra', to: '', filter: ['files/**', 'sidecar/**'] },
+    { from: 'LICENSE', to: 'files/licenses/clash-momo.txt' }
+  ],
   asar: true,
   npmRebuild: false,
   publish: null,
