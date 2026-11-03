@@ -375,6 +375,34 @@ try {
   assert.equal(assetRequests, 0)
   corruptSignature = false
   assert.equal((await invoke(page, 'checkWindowsUpdate')).update.tag, tag)
+  await page.evaluate(() => {
+    window.location.hash = '/settings'
+  })
+  const checkButton = page.getByRole('button', { name: /^(检查更新|檢查更新|Check for updates)$/ })
+  await checkButton.waitFor({ state: 'visible', timeout: 15000 })
+  await application.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    window.setMinimumSize(700, 500)
+    window.setSize(800, 700)
+  })
+  await checkButton.scrollIntoViewIfNeeded()
+  const overflow = await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')].find((element) =>
+      /^(检查更新|檢查更新|Check for updates)$/.test(element.textContent?.trim() || '')
+    )
+    const card =
+      button?.closest('.setting-card') || button?.parentElement?.parentElement?.parentElement
+    return {
+      page: document.documentElement.scrollWidth - window.innerWidth,
+      card: card ? card.scrollWidth - card.clientWidth : 0
+    }
+  })
+  assert(
+    overflow.page <= 1 && overflow.card <= 1,
+    `Settings horizontal overflow: ${JSON.stringify(overflow)}`
+  )
+  await mkdir(path.join(root, 'dist/validation'), { recursive: true })
+  await page.screenshot({ path: path.join(root, 'dist/validation/windows-settings.png') })
   evidence.tests.push('actual fixture client verifies signed CNB metadata and rejects tampering')
   await application.evaluate(() => {
     globalThis.__momoUpdateConfirmation = 0
