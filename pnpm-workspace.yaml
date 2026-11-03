@@ -11,5 +11,8 @@ publicHoistPattern:
 shamefullyHoist: true
 virtualStoreDirMaxLength: 80
 verifyDepsBeforeRun: false
+overrides:
+  # electron-builder 26.18.0 uses the cache-mode API absent from its declared get v3.
+  'app-builder-lib@26.18.0>@electron/get': 5.1.0
 patchedDependencies:
   vite-plugin-monaco-editor@1.1.0: patches/vite-plugin-monaco-editor@1.1.0.patch
