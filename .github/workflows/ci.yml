@@ -104,11 +104,19 @@ jobs:
           name: clash-momo-windows
           path: dist/release/*
           if-no-files-found: error
+      - name: Collect installed-client diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          $logs = Join-Path $env:APPDATA 'clash-momo/logs'
+          if (Test-Path $logs) {
+            Copy-Item -LiteralPath $logs -Destination "$env:RUNNER_TEMP/clash-momo-windows-installed-logs" -Recurse -Force
+          }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: failure()
         with:
           name: clash-momo-windows-diagnostics
           path: |
             ${{ runner.temp }}/clash-momo-windows-smoke/**/data/logs/*
-            ${{ env.APPDATA }}/clash-momo/logs/*
+            ${{ runner.temp }}/clash-momo-windows-installed-logs/*
           if-no-files-found: ignore

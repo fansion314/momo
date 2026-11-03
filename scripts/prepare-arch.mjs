@@ -79,10 +79,29 @@ const assets = [
   ])
 ]
 await rm('extra/sidecar', { recursive: true, force: true })
+async function downloadResource(url) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(90000) })
+      if (!response.ok) {
+        const error = new Error(`${url}: HTTP ${response.status}`)
+        if (response.status < 500 && response.status !== 429) throw error
+        await response.body?.cancel()
+        if (attempt === 3) throw error
+      } else {
+        return Buffer.from(await response.arrayBuffer())
+      }
+    } catch (error) {
+      if (attempt === 3 || /HTTP 4(?!29)/.test(String(error))) throw error
+    }
+    console.warn(`Retrying resource download (${attempt}/3): ${url}`)
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1000))
+  }
+  throw new Error(`Resource download failed: ${url}`)
+}
 for (const [file, url, expected] of assets) {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
-  const bytes = Buffer.from(await response.arrayBuffer())
+  console.log(`Preparing ${file}`)
+  const bytes = await downloadResource(url)
   if (createHash('sha256').update(bytes).digest('hex') !== expected)
     throw new Error(`Checksum mismatch: ${url}`)
   await mkdir(file.slice(0, file.lastIndexOf('/')), { recursive: true })
