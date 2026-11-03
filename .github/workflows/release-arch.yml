@@ -100,7 +100,9 @@ jobs:
             test -s "dist/$file"
             test -s "dist/$file.sha256"
           done
-          gh release create "$TAG" dist/* --verify-tag --title "$TAG" --notes-file packaging/release-notes.md
+          gh release create "$TAG" dist/* --draft --verify-tag --title "$TAG" --notes-file packaging/release-notes.md
+          python3 packaging/verify-release.py "$TAG" dist
+          gh release edit "$TAG" --draft=false --latest=false
   notify:
     needs: publish
     runs-on: ubuntu-latest
