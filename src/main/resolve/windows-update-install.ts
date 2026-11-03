@@ -67,6 +67,7 @@ function Record-UpdateResult($value) {
 }
 try {
   $completionPipe = New-Object IO.Pipes.NamedPipeServerStream($payload.completionPipeName, [IO.Pipes.PipeDirection]::In, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
+  Record-UpdateResult @{status='waiting'; application=$payload.application; waiterPid=$PID}
   $wait = $completionPipe.BeginWaitForConnection($null, $null)
   if (!$wait.AsyncWaitHandle.WaitOne(480000)) { throw 'Timed out waiting for the Windows installer to finish' }
   $completionPipe.EndWaitForConnection($wait)
@@ -74,12 +75,12 @@ try {
   $line = $reader.ReadLineAsync()
   if (!$line.Wait(10000)) { throw 'Timed out reading the Windows installer result' }
   $result = $line.Result | ConvertFrom-Json
-  if ($result.status -ne 'installed') { throw 'The Windows installer did not complete successfully' }
-  Record-UpdateResult @{status='installed'; application=$payload.application}
+  if ($result.status -ne 'installed') { throw ('The Windows installer did not complete successfully: ' + $result.error) }
+  Record-UpdateResult @{status='installed'; application=$payload.application; installerExitCode=$result.installerExitCode}
   $application = Start-Process -FilePath $payload.application -WorkingDirectory $payload.installDirectory -ArgumentList '--updated' -PassThru -ErrorAction Stop
-  Record-UpdateResult @{status='restarted'; application=$payload.application; pid=$application.Id}
+  Record-UpdateResult @{status='restarted'; application=$payload.application; pid=$application.Id; installerExitCode=$result.installerExitCode}
 } catch {
-  try { Record-UpdateResult @{status='error'; error=$_.Exception.Message} } catch {}
+  try { Record-UpdateResult @{status='error'; application=$payload.application; error=$_.Exception.Message} } catch {}
   exit 1
 } finally {
   if ($completionPipe) { $completionPipe.Dispose() }
@@ -93,12 +94,12 @@ $receiptWriter = $null
 $stage = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('ClashMomoUpdate-' + [Guid]::NewGuid().ToString('N'))
 $stageCreated = $false
 $prepared = $false
-function Notify-UpdateCompletion($status) {
+function Notify-UpdateCompletion($status, $errorMessage = '', $installerExitCode = $null) {
   $completionPipe = New-Object IO.Pipes.NamedPipeClientStream('.', $payload.completionPipeName, [IO.Pipes.PipeDirection]::Out)
   try {
     $completionPipe.Connect(30000)
     $writer = New-Object IO.StreamWriter($completionPipe)
-    try { $writer.WriteLine((@{status=$status} | ConvertTo-Json -Compress)); $writer.Flush() } finally { $writer.Dispose() }
+    try { $writer.WriteLine((@{status=$status; error=$errorMessage; installerExitCode=$installerExitCode} | ConvertTo-Json -Compress)); $writer.Flush() } finally { $writer.Dispose() }
   } finally { $completionPipe.Dispose() }
 }
 try {
@@ -142,10 +143,11 @@ try {
     throw 'The Windows installer exceeded its five-minute deadline'
   }
   if ($installer.ExitCode -ne 0) { throw ('Installer failed with code ' + $installer.ExitCode) }
-  Notify-UpdateCompletion 'installed'
+  Notify-UpdateCompletion 'installed' '' $installer.ExitCode
 } catch {
   if ($prepared) {
-    try { Notify-UpdateCompletion 'error' } catch {}
+    $failureMessage = $_.Exception.Message
+    try { Notify-UpdateCompletion 'error' $failureMessage } catch {}
   } elseif ($receiptWriter) {
     try { $receiptWriter.WriteLine((@{status='error'; error=$_.Exception.Message} | ConvertTo-Json -Compress)) } catch {}
   }

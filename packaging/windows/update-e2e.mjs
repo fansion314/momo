@@ -5,6 +5,7 @@ import { createServer } from 'node:https'
 import {
   cp,
   mkdir,
+  lstat,
   mkdtemp,
   readFile,
   readdir,
@@ -273,6 +274,54 @@ async function scopedProcesses(stop = false) {
   return JSON.parse((await powerShell(script)).stdout || '[]')
 }
 
+async function installationResults() {
+  const directory = path.join(dataDir, 'updates')
+  const result = []
+  for (const name of await readdir(directory).catch(() => [])) {
+    if (!/^install-result-[a-f0-9-]+\.json$/.test(name)) continue
+    const file = path.join(directory, name)
+    const info = await lstat(file).catch(() => undefined)
+    if (!info?.isFile() || info.size > 65536) continue
+    const data = await readFile(file, 'utf8')
+    try {
+      result.push({ name, ...JSON.parse(data) })
+    } catch {
+      result.push({ name, status: 'invalid result JSON' })
+    }
+  }
+  return result
+}
+
+async function waitForCallerRestart() {
+  const deadline = Date.now() + 330000
+  let previous = ''
+  let state
+  while (Date.now() < deadline) {
+    state = { processes: await scopedProcesses(), results: await installationResults() }
+    const current = state.results.filter(
+      (result) =>
+        result.application?.toLowerCase() === path.join(installDir, 'Clash Momo.exe').toLowerCase()
+    )
+    const serialized = JSON.stringify(current)
+    if (serialized !== previous) {
+      console.log('Windows installation completion state:', serialized)
+      previous = serialized
+    }
+    const failed = current.find((result) => result.status === 'error')
+    if (failed) throw new Error(`Windows installer completion failed: ${JSON.stringify(failed)}`)
+    if (
+      state.processes.some(
+        (item) =>
+          item.ExecutablePath.toLowerCase() ===
+          path.join(installDir, 'Clash Momo.exe').toLowerCase()
+      )
+    )
+      return
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  throw new Error(`Original caller restart after NSIS installation: ${JSON.stringify(state)}`)
+}
+
 try {
   await checkpoint('build isolated revision 4 updater fixture')
   await mkdir(source, { recursive: true })
@@ -527,17 +576,7 @@ try {
     120000
   )
   await checkpoint('wait for the original caller to restart the updated application')
-  await waitFor(
-    () => scopedProcesses(),
-    (items) =>
-      items.some(
-        (item) =>
-          item.ExecutablePath.toLowerCase() ===
-          path.join(installDir, 'Clash Momo.exe').toLowerCase()
-      ),
-    'Original caller restart after NSIS installation',
-    45000
-  )
+  await waitForCallerRestart()
   assert.equal(
     hash(await readFile(path.join(installDir, 'resources/app.asar'))),
     hash(await readFile(path.join(root, 'dist/windows/win-unpacked/resources/app.asar')))
@@ -620,6 +659,7 @@ try {
       {
         ...evidence,
         error: error?.stack || String(error),
+        installationResults: await installationResults(),
         launchers: launchers.map((launcher) => ({
           pid: launcher.pid,
           exitCode: launcher.exitCode,
@@ -665,6 +705,10 @@ try {
       { recursive: true }
     ).catch(() => {})
   }
+  await writeFile(
+    path.join(root, 'dist/validation/windows-installation-results.json'),
+    JSON.stringify(await installationResults(), null, 2) + '\n'
+  ).catch(() => {})
   await rm(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(
     (error) => {
       console.error('Windows update fixture cleanup failed:', error)

@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -152,12 +152,32 @@ public class MomoUpdateFixture {
         expect(restarted[0]).toBe(application)
         expect(restarted[1]).toContain('--updated')
         expect(restarted.slice(3)).toEqual(caller.slice(3))
+        let completion:
+          { status: string; application: string; installerExitCode: number } | undefined
+        while (Date.now() < deadline) {
+          try {
+            const results = (await readdir(directory)).filter((name) =>
+              /^install-result-[a-f0-9-]+\.json$/.test(name)
+            )
+            expect(results).toHaveLength(1)
+            completion = JSON.parse(await readFile(path.join(directory, results[0]), 'utf8'))
+            expect(completion?.status).toBe('restarted')
+            expect(completion?.installerExitCode).toBe(0)
+            expect(completion?.application).toBe(application)
+            break
+          } catch (error) {
+            if (Date.now() + 100 >= deadline) throw error
+            await new Promise((resolve) => setTimeout(resolve, 100))
+          }
+        }
+        if (!completion) throw new Error('The original caller did not record installer completion')
         await mkdir('dist/validation', { recursive: true })
         await writeFile(
           'dist/validation/windows-update-bootstrap.json',
           JSON.stringify(
             {
               restartedFrom: restarted[0],
+              completion,
               caller: {
                 sid: caller[3],
                 tokenElevationType: caller[4],
