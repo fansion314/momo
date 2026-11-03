@@ -524,6 +524,24 @@ function Stats({ snapshot }: { snapshot: DashboardSnapshot }) {
       color: '#ec4899'
     },
     {
+      icon: LuArrowDownToLine,
+      label: t('traffic.embedded.proxyDownload'),
+      value: calcTraffic(snapshot.proxyTraffic.download),
+      color: '#3b82f6'
+    },
+    {
+      icon: LuArrowUpFromLine,
+      label: t('traffic.embedded.proxyUpload'),
+      value: calcTraffic(snapshot.proxyTraffic.upload),
+      color: '#a855f7'
+    },
+    {
+      icon: LuServer,
+      label: t('traffic.embedded.proxyTraffic'),
+      value: calcTraffic(total(snapshot.proxyTraffic)),
+      color: '#ec4899'
+    },
+    {
       icon: LuActivity,
       label: t('traffic.history.newConnections'),
       value: snapshot.summary.data.connections.toLocaleString(),
@@ -544,7 +562,7 @@ function Stats({ snapshot }: { snapshot: DashboardSnapshot }) {
   ]
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {stats.map(({ icon: Icon, label, value, color }) => (
           <div className="traffic-panel traffic-stat" key={label}>
             <span className="traffic-stat-icon" style={{ color, backgroundColor: `${color}12` }}>
@@ -561,6 +579,9 @@ function Stats({ snapshot }: { snapshot: DashboardSnapshot }) {
         ))}
       </div>
       <p className="mt-2 text-[11px] text-foreground/40">{t('traffic.history.countHelp')}</p>
+      <p className="mt-1 text-[11px] text-foreground/40">
+        {t('traffic.embedded.proxyTrafficHelp')}
+      </p>
     </div>
   )
 }

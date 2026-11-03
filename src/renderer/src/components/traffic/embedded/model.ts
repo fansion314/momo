@@ -21,6 +21,7 @@ export const moduleDimensions = {
 export interface DashboardSnapshot {
   query: HistoryQuery
   summary: HistoryResult<HistoryTotals>
+  proxyTraffic: Pick<HistoryTotals, 'upload' | 'download'>
   series: HistoryResult<HistoryPoint[]>
   groups: Record<DashboardDimension, HistoryResult<HistoryGroup[]>>
 }
@@ -34,7 +35,7 @@ export async function loadDashboard(
   read: HistoryReader,
   query: HistoryQuery
 ): Promise<DashboardSnapshot> {
-  const summary = await read<HistoryTotals>('summary', query)
+  const { summary, proxyTraffic } = await loadTrafficTotals(read, query)
   const series = await read<HistoryPoint[]>('series', { ...query, limit: 1000 })
   const groups = {} as DashboardSnapshot['groups']
   for (const dimension of dimensions) {
@@ -44,7 +45,30 @@ export async function loadDashboard(
       limit: 1000
     })
   }
-  return { query, summary, series, groups }
+  return { query, summary, proxyTraffic, series, groups }
+}
+
+export async function loadTrafficTotals(
+  read: HistoryReader,
+  query: HistoryQuery
+): Promise<Pick<DashboardSnapshot, 'summary' | 'proxyTraffic'>> {
+  // Exact summaries avoid undercounting when the proxy ranking is truncated.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const summary = await read<HistoryTotals>('summary', query)
+    if (query.filters?.proxy === 'DIRECT')
+      return { summary, proxyTraffic: { upload: 0, download: 0 } }
+    if (query.filters?.proxy !== undefined) return { summary, proxyTraffic: summary.data }
+    const direct = await read<HistoryTotals>('summary', {
+      ...query,
+      filters: { ...query.filters, proxy: 'DIRECT' }
+    })
+    if (summary.lastCommitAt !== direct.lastCommitAt) continue
+    const upload = summary.data.upload - direct.data.upload
+    const download = summary.data.download - direct.data.download
+    if (upload < 0 || download < 0) continue
+    return { summary, proxyTraffic: { upload, download } }
+  }
+  throw new Error('Traffic history changed while reading totals; retry shortly')
 }
 
 export interface Selection {
@@ -59,7 +83,7 @@ export function selectionQuery(query: HistoryQuery, selection: Selection): Histo
   }
 }
 
-export function total(row: HistoryTotals): number {
+export function total(row: Pick<HistoryTotals, 'upload' | 'download'>): number {
   return row.upload + row.download
 }
 

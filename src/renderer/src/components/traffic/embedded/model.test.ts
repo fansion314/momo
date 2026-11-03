@@ -4,7 +4,13 @@ import type {
   HistoryQuery,
   HistoryResult
 } from '../../../../../shared/traffic-history'
-import { loadDashboard, selectionQuery, trendPoints, type HistoryReader } from './model'
+import {
+  loadDashboard,
+  loadTrafficTotals,
+  selectionQuery,
+  trendPoints,
+  type HistoryReader
+} from './model'
 
 const query: HistoryQuery = {
   from: 30000,
@@ -36,10 +42,11 @@ describe('embedded traffic adapter', () => {
     const snapshot = await loadDashboard(read, dailyQuery)
     expect(calls.map((call) => call.endpoint)).toEqual([
       'summary',
+      'summary',
       'series',
       ...Array(5).fill('groups')
     ])
-    expect(calls.slice(2).map((call) => call.query.group_by)).toEqual([
+    expect(calls.slice(3).map((call) => call.query.group_by)).toEqual([
       'domain',
       'policy',
       'proxy',
@@ -52,6 +59,39 @@ describe('embedded traffic adapter', () => {
     }
     expect(snapshot.summary.data).toEqual({ upload: 2, download: 3, connections: 1 })
     expect(snapshot.groups.domain.truncated).toBe(true)
+  })
+
+  it('subtracts exact DIRECT totals instead of summing a truncated proxy ranking', async () => {
+    const read: HistoryReader = async <T>(_endpoint, params) =>
+      result(
+        (params.filters?.proxy === 'DIRECT'
+          ? { upload: 30, download: 100, connections: 2 }
+          : { upload: 80, download: 1000, connections: 7 }) as T
+      )
+    const snapshot = await loadTrafficTotals(read, query)
+    expect(snapshot.proxyTraffic).toEqual({ upload: 50, download: 900 })
+    expect(snapshot.summary.data.download).toBe(1000)
+  })
+
+  it('preserves exact proxy filters, including a proxy group that resolves to DIRECT', async () => {
+    const read: HistoryReader = async <T>() =>
+      result({ upload: 30, download: 100, connections: 2 } as T)
+    expect(
+      (await loadTrafficTotals(read, { ...query, filters: { proxy: 'DIRECT' } })).proxyTraffic
+    ).toEqual({ upload: 0, download: 0 })
+    expect(
+      (await loadTrafficTotals(read, { ...query, filters: { proxy: 'node' } })).proxyTraffic
+    ).toMatchObject({ upload: 30, download: 100 })
+  })
+
+  it('retries changing commit watermarks and never reports negative proxy traffic', async () => {
+    let calls = 0
+    const read: HistoryReader = async <T>() => ({
+      ...result({ upload: 30, download: 100, connections: 2 } as T),
+      lastCommitAt: ++calls
+    })
+    await expect(loadTrafficTotals(read, query)).rejects.toThrow('changed while reading')
+    expect(calls).toBe(6)
   })
 
   it('does not return a partial dashboard as a successful read', async () => {
