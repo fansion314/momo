@@ -42,20 +42,65 @@ export function windowsUpdateInstallCommand(
     JSON.stringify({
       executable,
       pipeName: `clash-momo-update-${randomUUID()}`,
+      completionPipeName: `clash-momo-update-complete-${randomUUID()}`,
+      application: path.win32.join(installDirectory, 'Clash Momo.exe'),
+      installDirectory,
+      resultPath: path.win32.join(
+        path.win32.dirname(executable),
+        `install-result-${randomUUID()}.json`
+      ),
       size: asset.size,
       sha256: asset.sha256,
       // NSIS consumes the final /D= argument through the end of the command line.
-      arguments: `${['/S', '--updated', '--force-run'].map(quoteWindowsArgument).join(' ')} /D=${installDirectory}`
+      arguments: `${['/S', '--updated'].map(quoteWindowsArgument).join(' ')} /D=${installDirectory}`
     }),
     'utf8'
   ).toString('base64')
-  const launcher = compactLauncher(`
+  const compress = (script: string): string =>
+    gzipSync(Buffer.from(script, 'utf8')).toString('base64')
+  const restart = compress(`
+$ErrorActionPreference = 'Stop'
+$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')) | ConvertFrom-Json
+$completionPipe = $null
+function Record-UpdateResult($value) {
+  [IO.File]::WriteAllText($payload.resultPath, ($value | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+}
+try {
+  $completionPipe = New-Object IO.Pipes.NamedPipeServerStream($payload.completionPipeName, [IO.Pipes.PipeDirection]::In, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
+  $wait = $completionPipe.BeginWaitForConnection($null, $null)
+  if (!$wait.AsyncWaitHandle.WaitOne(360000)) { throw 'Timed out waiting for the Windows installer to finish' }
+  $completionPipe.EndWaitForConnection($wait)
+  $reader = New-Object IO.StreamReader($completionPipe)
+  $line = $reader.ReadLineAsync()
+  if (!$line.Wait(10000)) { throw 'Timed out reading the Windows installer result' }
+  $result = $line.Result | ConvertFrom-Json
+  if ($result.status -ne 'installed') { throw 'The Windows installer did not complete successfully' }
+  Record-UpdateResult @{status='installed'; application=$payload.application}
+  $application = Start-Process -FilePath $payload.application -WorkingDirectory $payload.installDirectory -ArgumentList '--updated' -PassThru -ErrorAction Stop
+  Record-UpdateResult @{status='restarted'; application=$payload.application; pid=$application.Id}
+} catch {
+  try { Record-UpdateResult @{status='error'; error=$_.Exception.Message} } catch {}
+  exit 1
+} finally {
+  if ($completionPipe) { $completionPipe.Dispose() }
+}
+`)
+  const launcher = compress(`
 $ErrorActionPreference = 'Stop'
 $payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')) | ConvertFrom-Json
 $receiptPipe = $null
 $receiptWriter = $null
 $stage = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('ClashMomoUpdate-' + [Guid]::NewGuid().ToString('N'))
 $stageCreated = $false
+$prepared = $false
+function Notify-UpdateCompletion($status) {
+  $completionPipe = New-Object IO.Pipes.NamedPipeClientStream('.', $payload.completionPipeName, [IO.Pipes.PipeDirection]::Out)
+  try {
+    $completionPipe.Connect(30000)
+    $writer = New-Object IO.StreamWriter($completionPipe)
+    try { $writer.WriteLine((@{status=$status} | ConvertTo-Json -Compress)); $writer.Flush() } finally { $writer.Dispose() }
+  } finally { $completionPipe.Dispose() }
+}
 try {
   $receiptPipe = New-Object IO.Pipes.NamedPipeClientStream('.', $payload.pipeName, [IO.Pipes.PipeDirection]::Out)
   $receiptPipe.Connect(10000)
@@ -86,13 +131,19 @@ try {
   try { $actual = [BitConverter]::ToString($sha.ComputeHash($verifiedFile)).Replace('-', '').ToLowerInvariant() } finally { $verifiedFile.Dispose(); $sha.Dispose() }
   if ($actual -ne $payload.sha256) { throw 'Protected update checksum changed' }
   $receiptWriter.WriteLine('{"status":"ready"}')
+  $prepared = $true
   if (Get-Process -Id ${parentPid} -ErrorAction SilentlyContinue) {
     Wait-Process -Id ${parentPid} -Timeout 60 -ErrorAction Stop
   }
   $installer = Start-Process -FilePath $protected -ArgumentList $payload.arguments -Wait -PassThru -ErrorAction Stop
   if ($installer.ExitCode -ne 0) { throw ('Installer failed with code ' + $installer.ExitCode) }
+  Notify-UpdateCompletion 'installed'
 } catch {
-  if ($receiptWriter) { $receiptWriter.WriteLine((@{status='error'; error=$_.Exception.Message} | ConvertTo-Json -Compress)) }
+  if ($prepared) {
+    try { Notify-UpdateCompletion 'error' } catch {}
+  } elseif ($receiptWriter) {
+    try { $receiptWriter.WriteLine((@{status='error'; error=$_.Exception.Message} | ConvertTo-Json -Compress)) } catch {}
+  }
   exit 1
 } finally {
   if ($receiptWriter) { $receiptWriter.Dispose() }
@@ -104,8 +155,20 @@ try {
 $ErrorActionPreference = 'Stop'
 $payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}')) | ConvertFrom-Json
 $receiptPipe = New-Object IO.Pipes.NamedPipeServerStream($payload.pipeName, [IO.Pipes.PipeDirection]::In, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
+$waiter = $null
+function Launcher-Arguments($compressed) {
+  $loader = @'
+$bytes = [Convert]::FromBase64String('__MOMO_COMPRESSED__')
+$memory = New-Object IO.MemoryStream(,$bytes)
+$gzip = New-Object IO.Compression.GZipStream($memory, [IO.Compression.CompressionMode]::Decompress)
+$reader = New-Object IO.StreamReader($gzip, [Text.Encoding]::UTF8)
+try { & ([ScriptBlock]::Create($reader.ReadToEnd())) } finally { $reader.Dispose(); $gzip.Dispose(); $memory.Dispose() }
+'@
+  return [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($loader.Replace('__MOMO_COMPRESSED__', $compressed)))
+}
 try {
-  Start-Process -FilePath ([Environment]::GetFolderPath('System') + '\\WindowsPowerShell\\v1.0\\powershell.exe') -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', '${launcher}') -ErrorAction Stop | Out-Null
+  $installerCommand = Launcher-Arguments '${launcher}'
+  Start-Process -FilePath ([Environment]::GetFolderPath('System') + '\\WindowsPowerShell\\v1.0\\powershell.exe') -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', $installerCommand) -ErrorAction Stop | Out-Null
   $wait = $receiptPipe.BeginWaitForConnection($null, $null)
   if (!$wait.AsyncWaitHandle.WaitOne(45000)) { throw 'Timed out preparing the protected Windows update' }
   $receiptPipe.EndWaitForConnection($wait)
@@ -114,7 +177,12 @@ try {
   if (!$line.Wait(45000)) { throw 'Timed out verifying the protected Windows update' }
   $receipt = $line.Result | ConvertFrom-Json
   if ($receipt.status -ne 'ready') { throw $receipt.error }
+  # This worker inherits the original caller token, without requesting elevation.
+  # It outlives this request so the application can quit before installation.
+  $restartCommand = Launcher-Arguments '${restart}'
+  $waiter = Start-Process -FilePath ([Environment]::GetFolderPath('System') + '\\WindowsPowerShell\\v1.0\\powershell.exe') -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', $restartCommand) -PassThru -ErrorAction Stop
 } catch {
+  if ($waiter -and !$waiter.HasExited) { Stop-Process -Id $waiter.Id -Force -ErrorAction SilentlyContinue }
   [Console]::Error.WriteLine($_.Exception.Message)
   exit 1
 } finally {

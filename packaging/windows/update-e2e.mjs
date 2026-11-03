@@ -526,7 +526,7 @@ try {
     'Real N+1 installation',
     120000
   )
-  await checkpoint('wait for installer to restart the user application')
+  await checkpoint('wait for the original caller to restart the updated application')
   await waitFor(
     () => scopedProcesses(),
     (items) =>
@@ -535,7 +535,7 @@ try {
           item.ExecutablePath.toLowerCase() ===
           path.join(installDir, 'Clash Momo.exe').toLowerCase()
       ),
-    'NSIS user-session restart',
+    'Original caller restart after NSIS installation',
     45000
   )
   assert.equal(
