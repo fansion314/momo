@@ -1,7 +1,6 @@
 use super::*;
 use std::{
     io::{BufRead, BufReader},
-    os::unix::net::UnixListener,
     process::{Child, Command},
 };
 
@@ -147,73 +146,94 @@ fn recovery_compares_process_start_identity_before_signalling() {
     assert!(!record.exists());
 }
 
-#[test]
-fn managed_core_fixture() {
-    let Some(root) = std::env::var_os("MOMO_HELPER_MANAGED_FIXTURE_ROOT") else {
-        return;
-    };
-    let root = PathBuf::from(root);
-    unsafe {
-        libc::signal(
-            libc::SIGINT,
-            interrupt_fixture as *const () as libc::sighandler_t,
-        );
-    }
-    let update_runtime = || {
-        let config = fs::read_to_string(root.join("data/config.yaml")).unwrap();
-        files::write_json(
-            &root.join("fixture-runtime.json"),
-            &serde_json::json!({
-                "config": config,
-                "key": std::env::var("CLASH_AGE_SECRET_KEY").unwrap_or_default(),
-            }),
-        )
-        .unwrap();
-    };
-    update_runtime();
-    let listener = UnixListener::bind(root.join("data/core.sock")).unwrap();
-    listener.set_nonblocking(true).unwrap();
-    while !INTERRUPTED.load(Ordering::Acquire) {
-        let (mut stream, _) = match listener.accept() {
-            Ok(connection) => connection,
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(5));
-                continue;
-            }
-            Err(e) => panic!("fixture accept: {e}"),
-        };
-        stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        let reload = line.starts_with("PUT /configs");
-        let mut length = 0;
-        loop {
-            line.clear();
-            reader.read_line(&mut line).unwrap();
-            if line == "\r\n" {
-                break;
-            }
-            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                length = value.trim().parse::<usize>().unwrap();
-            }
-        }
-        let mut bytes = vec![0u8; length];
-        reader.read_exact(&mut bytes).unwrap();
-        if reload {
-            update_runtime();
-        }
-        stream
-            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-            .unwrap();
-    }
-}
+// Compile a direct executable so process start/executable identity never changes
+// through a shebang interpreter or an exec wrapper during the recovery test.
+const CORE_FIXTURE: &str = r#"
+#define _POSIX_C_SOURCE 200809L
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/select.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-fn quote_fixture(value: &Path) -> String {
-    format!("'{}'", value.to_str().unwrap().replace('\'', "'\\''"))
+static volatile sig_atomic_t interrupted = 0;
+static void stop_fixture(int signal_number) { (void) signal_number; interrupted = 1; }
+static void update_runtime(const char *work) {
+    char path[4096], configuration[128] = {0};
+    if (snprintf(path, sizeof path, "%s/config.yaml", work) >= (int) sizeof path) exit(2);
+    FILE *input = fopen(path, "r");
+    if (!input) exit(2);
+    if (fread(configuration, 1, sizeof configuration - 1, input) == 0) exit(2);
+    fclose(input);
+    if (snprintf(path, sizeof path, "%s/../fixture-runtime.json", work) >= (int) sizeof path) exit(2);
+    int descriptor = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (descriptor < 0) exit(2);
+    FILE *output = fdopen(descriptor, "w");
+    if (!output) exit(2);
+    const char *key = getenv("CLASH_AGE_SECRET_KEY");
+    // All fixture configurations and keys are fixed ASCII constants.
+    fprintf(output, "{\"config\":\"%s\",\"key\":\"%s\"}", configuration, key ? key : "");
+    if (fclose(output) != 0) exit(2);
 }
+int main(int argc, char **argv) {
+    const char *work = NULL, *socket_path = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-t") == 0) return 0;
+        if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) work = argv[++i];
+        else if (strcmp(argv[i], "-ext-ctl-unix") == 0 && i + 1 < argc) socket_path = argv[++i];
+    }
+    if (!work || !socket_path) return 2;
+    struct sigaction action = {0};
+    action.sa_handler = stop_fixture;
+    sigemptyset(&action.sa_mask);
+    if (sigaction(SIGINT, &action, NULL) != 0) return 2;
+    update_runtime(work);
+    int listener = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (listener < 0) return 2;
+    struct sockaddr_un address = {0};
+    address.sun_family = AF_UNIX;
+    if (strlen(socket_path) >= sizeof address.sun_path) return 2;
+    memcpy(address.sun_path, socket_path, strlen(socket_path) + 1);
+    if (bind(listener, (struct sockaddr *) &address, sizeof address) != 0 || listen(listener, 8) != 0) return 2;
+    while (!interrupted) {
+        fd_set descriptors;
+        FD_ZERO(&descriptors);
+        FD_SET(listener, &descriptors);
+        struct timeval timeout = {.tv_sec = 0, .tv_usec = 10000};
+        if (select(listener + 1, &descriptors, NULL, NULL, &timeout) <= 0) continue;
+        int client = accept(listener, NULL, NULL);
+        if (client < 0) continue;
+        char request[16384] = {0};
+        size_t used = 0;
+        while (used < sizeof request - 1 && strstr(request, "\r\n\r\n") == NULL) {
+            ssize_t count = read(client, request + used, 1);
+            if (count <= 0) break;
+            used += (size_t) count;
+        }
+        const char *length_header = strstr(request, "Content-Length:");
+        size_t body_size = length_header ? (size_t) strtoul(length_header + 15, NULL, 10) : 0;
+        char buffer[1024];
+        while (body_size > 0) {
+            size_t count = body_size < sizeof buffer ? body_size : sizeof buffer;
+            ssize_t received = read(client, buffer, count);
+            if (received <= 0) break;
+            body_size -= (size_t) received;
+        }
+        if (strncmp(request, "PUT /configs", 12) == 0) update_runtime(work);
+        const char response[] = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        if (write(client, response, sizeof response - 1) < 0) { close(client); continue; }
+        close(client);
+    }
+    close(listener);
+    unlink(socket_path);
+    return 0;
+}
+"#;
 
 struct StopFixtureService(Arc<Service>);
 impl Drop for StopFixtureService {
@@ -226,6 +246,24 @@ impl Drop for StopFixtureService {
 #[test]
 fn metadata_commit_failure_restores_runtime_files_and_migration_state() {
     use crate::snapshot::{self, CommitFailure};
+    let Some(build) = protected_root() else {
+        return;
+    };
+    let source = build.path().join("core-fixture.c");
+    let executable = build.path().join("core-fixture");
+    fs::write(&source, CORE_FIXTURE).unwrap();
+    let compiled = Command::new("/usr/bin/cc")
+        .args(["-std=c11", "-Wall", "-Wextra", "-Werror"])
+        .arg(&source)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "core fixture compilation failed: {}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
     for (start, changed_key, cancel) in [
         (true, false, false),
         (false, false, false),
@@ -252,12 +290,7 @@ fn metadata_commit_failure_restores_runtime_files_and_migration_state() {
                 files::atomic_write(&root_path.join("migrated"), b"legacy marker", 0o600).unwrap();
             }
             let core = root_path.join("mihomomo");
-            let script = format!(
-                "#!/bin/sh\nfor argument do if [ \"$argument\" = -t ]; then exit 0; fi; done\nMOMO_HELPER_MANAGED_FIXTURE_ROOT={} {} --exact process::tests::managed_core_fixture --nocapture --test-threads=1 &\nchild=$!\ntrap 'kill -INT \"$child\"; wait \"$child\"; exit 0' INT TERM\nwait \"$child\"\n",
-                quote_fixture(root_path),
-                quote_fixture(&std::env::current_exe().unwrap()),
-            );
-            files::atomic_write(&core, script.as_bytes(), 0o700).unwrap();
+            files::copy_executable(&executable, &core).unwrap();
             let shared = Service::new(
                 root_path,
                 Installation {
