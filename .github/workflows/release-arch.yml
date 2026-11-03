@@ -94,6 +94,7 @@ jobs:
           ARCH_SIGNING_PRIVATE_KEY: ${{ secrets.ARCH_SIGNING_PRIVATE_KEY }}
           ARCH_SIGNING_PASSPHRASE: ${{ secrets.ARCH_SIGNING_PASSPHRASE }}
           ARCH_SIGNING_KEY_ID: ${{ secrets.ARCH_SIGNING_KEY_ID }}
+          WINDOWS_UPDATE_SIGNING_KEY: ${{ secrets.WINDOWS_UPDATE_SIGNING_KEY }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo 'Release exists; refusing to overwrite assets' >&2
@@ -105,6 +106,7 @@ jobs:
           test -s "dist/clash-momo-${TAG#clash-momo-v}-windows-x64-portable.zip"
           revision=$(node -p 'require("./packaging/macos/release.json").revision')
           test -s "dist/clash-momo-${TAG#clash-momo-v}-macos-arm64-r${revision}.tar.gz"
+          node scripts/sign-windows-update.mjs "$TAG" dist
           gh release create "$TAG" dist/* --draft --verify-tag --title "$TAG" --notes-file packaging/windows/release-notes.md
           node scripts/verify-release-assets.mjs "$TAG" dist
           gh release edit "$TAG" --draft=false --latest

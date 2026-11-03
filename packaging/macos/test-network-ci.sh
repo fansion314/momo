@@ -3,6 +3,7 @@
 set -euo pipefail
 test "${GITHUB_ACTIONS:-}" = true
 test "$(uname -sm)" = 'Darwin arm64'
+root=$(pwd)
 service='Clash Momo CI PAC Test'
 if /usr/sbin/networksetup -listallnetworkservices | sed 's/^\*//' | grep -Fx "$service"; then
   echo 'Reserved CI service already exists; refusing to alter it' >&2
@@ -25,6 +26,6 @@ PY
 )
 sudo "$test_binary" --nocapture
 sudo "$test_binary" large_snapshot_has_bounded_memory --nocapture > /tmp/clash-momo-helper-snapshot-memory.txt
-mkdir -p "$OLDPWD/dist/validation"
-cp /tmp/clash-momo-helper-snapshot-memory.txt "$OLDPWD/dist/validation/"
+mkdir -p "$root/dist/validation"
+cp /tmp/clash-momo-helper-snapshot-memory.txt "$root/dist/validation/"
 sudo env MOMO_HELPER_TEST_NETWORK_SERVICE="$service" "$test_binary" native_scoped_proxy_dns_roundtrip --nocapture
