@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
-import { quoteWindowsArgument } from '../core/windows-elevation'
 import type { WindowsUpdateAsset } from '../../shared/windows-update'
 
 function encode(script: string): string {
@@ -51,8 +50,9 @@ export function windowsUpdateInstallCommand(
       ),
       size: asset.size,
       sha256: asset.sha256,
-      // NSIS consumes the final /D= argument through the end of the command line.
-      arguments: `${['/S', '--updated'].map(quoteWindowsArgument).join(' ')} /D=${installDirectory}`
+      // NSIS's /S parser rejects a closing quote as an argument terminator.
+      // Its final /D= value also consumes the unquoted remainder of the line.
+      arguments: `/S --updated /D=${installDirectory}`
     }),
     'utf8'
   ).toString('base64')

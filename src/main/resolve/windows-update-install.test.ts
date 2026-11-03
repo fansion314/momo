@@ -36,11 +36,14 @@ describe('Windows update elevation launcher', () => {
     expect(launcher.indexOf('ComputeHash')).toBeLessThan(launcher.indexOf('\'{"status":"ready"}\''))
     expect(launcher).not.toContain(executable)
     const payload = launcher.match(/FromBase64String\('([A-Za-z0-9+/=]+)'\)/)?.[1]
-    expect(JSON.parse(Buffer.from(payload || '', 'base64').toString('utf8'))).toMatchObject({
+    const installerPayload = JSON.parse(Buffer.from(payload || '', 'base64').toString('utf8'))
+    expect(installerPayload.arguments).toMatch(/^\/S --updated \/D=/)
+    expect(installerPayload.arguments).not.toContain('"/S"')
+    expect(installerPayload).toMatchObject({
       executable,
       size: 123,
       sha256: 'a'.repeat(64),
-      arguments: '"/S" "--updated" /D=D:\\中文 目录\\Clash Momo',
+      arguments: '/S --updated /D=D:\\中文 目录\\Clash Momo',
       application: 'D:\\中文 目录\\Clash Momo\\Clash Momo.exe'
     })
     const restarter = gunzipSync(Buffer.from(compressed[1]?.[1] || '', 'base64')).toString('utf8')
