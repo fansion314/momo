@@ -88,6 +88,8 @@ let corruptDownload = false
 let assetRequests = 0
 let application
 let fixtureServer
+let primaryError
+const launchers = []
 const windowsPowerShell = path.win32.join(
   process.env.SystemRoot || 'C:\\Windows',
   'System32',
@@ -101,6 +103,37 @@ const evidence = {
   productionSource: packageManifest.source_commit,
   tests: [],
   interactiveUac: 'not covered: elevated CI runner'
+}
+
+async function checkpoint(stage) {
+  evidence.stage = stage
+  await mkdir(path.join(root, 'dist/validation'), { recursive: true })
+  await writeFile(
+    path.join(root, 'dist/validation/windows-update-e2e-progress.json'),
+    JSON.stringify(evidence, null, 2) + '\n'
+  )
+  console.log(`Windows update acceptance: ${stage}`)
+}
+
+function trackLauncher() {
+  const launcher = application.process()
+  launchers.push(launcher)
+}
+
+async function retireLaunchers() {
+  for (const launcher of launchers) {
+    if (launcher.exitCode !== null || launcher.signalCode !== null) continue
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 5000)
+      launcher.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+    // Playwright's Windows cmd.exe wrapper can retain its working directory
+    // after Electron exits. Only terminate this exact test-created child handle.
+    if (launcher.exitCode === null && launcher.signalCode === null) launcher.kill()
+  }
 }
 
 async function run(program, args, cwd = root) {
@@ -161,6 +194,7 @@ async function attachFixture(executable, sourceName = 'cnb') {
     cwd: path.dirname(executable),
     timeout: 45000
   })
+  trackLauncher()
   const page = await application.firstWindow()
   const fetchProbe = await application.evaluate(
     async ({ session, dialog }, { base, sourceName, savePath }) => {
@@ -240,6 +274,7 @@ async function scopedProcesses(stop = false) {
 }
 
 try {
+  await checkpoint('build isolated revision 4 updater fixture')
   await mkdir(source, { recursive: true })
   for (const name of [
     'src',
@@ -384,6 +419,7 @@ try {
   await powerShell(
     `$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedInstall}')) | ConvertFrom-Json; $process=Start-Process -FilePath $p.installer -ArgumentList ('/S /D=' + $p.directory) -Wait -PassThru; if ($process.ExitCode) { throw 'Fixture installation failed' }`
   )
+  await checkpoint('start installed updater fixture and verify metadata')
   const marker = path.join(dataDir, 'update-e2e-retain-data.txt')
   await writeFile(marker, 'preserve through application update')
   const historyPath = path.join(dataDir, 'work/traffic-history.db')
@@ -434,7 +470,28 @@ try {
   )
   await mkdir(path.join(root, 'dist/validation'), { recursive: true })
   await page.screenshot({ path: path.join(root, 'dist/validation/windows-settings.png') })
+  await page.evaluate(() => {
+    window.location.hash = '/mihomo'
+  })
+  await page
+    .getByText(/^(Bundled mihomomo \/ Smart|内置 mihomomo \/ Smart|內建 mihomomo \/ Smart)$/)
+    .waitFor()
+  assert.equal(await page.getByText(/pacman/).count(), 0)
+  await page.screenshot({ path: path.join(root, 'dist/validation/windows-core-settings.png') })
+  await page.evaluate(() => {
+    window.location.hash = '/traffic'
+  })
+  const proxyLabel = page.getByText(/^(Proxy download|代理下载量|代理下載量)$/)
+  await proxyLabel.waitFor({ state: 'visible', timeout: 30000 })
+  assert.equal(await page.locator('.traffic-stat').count(), 9)
+  const proxyValue = await proxyLabel.locator('..').locator('strong').innerText()
+  assert.match(proxyValue, /^0(?:\.0+)? B$/)
+  await page.screenshot({ path: path.join(root, 'dist/validation/windows-traffic-overview.png') })
+  evidence.tests.push(
+    'platform core settings and nine traffic overview metrics render; DIRECT-only proxy totals stay zero'
+  )
   evidence.tests.push('actual fixture client verifies signed CNB metadata and rejects tampering')
+  await checkpoint('verify separate confirmations and corrupt download rejection')
   await application.evaluate(() => {
     globalThis.__momoUpdateConfirmation = 0
   })
@@ -458,15 +515,18 @@ try {
     'download and installation require separate confirmations; corrupt installer rejected'
   )
   const originalAsarHash = hash(await readFile(path.join(installDir, 'resources/app.asar')))
+  await checkpoint('request protected installer and normal application shutdown')
   await invoke(page, 'installWindowsUpdate').catch((error) => {
     if (!/closed|Target/.test(String(error))) throw error
   })
+  await checkpoint('wait for actual revision 5 installer replacement')
   await waitFor(
     async () => hash(await readFile(path.join(installDir, 'resources/app.asar'))),
     (value) => value !== originalAsarHash,
     'Real N+1 installation',
     120000
   )
+  await checkpoint('wait for installer to restart the user application')
   await waitFor(
     () => scopedProcesses(),
     (items) =>
@@ -489,6 +549,8 @@ try {
     cwd: installDir,
     timeout: 45000
   })
+  trackLauncher()
+  await checkpoint('verify upgraded client, configuration and history')
   page = await application.firstWindow()
   assert.equal((await invoke(page, 'windowsUpdateState')).currentRevision, revision)
   await waitFor(
@@ -509,11 +571,13 @@ try {
   assert((await stat(historyPath)).size >= historySize)
   await application.close()
   application = undefined
+  await retireLaunchers()
   evidence.tests.push(
     'real NSIS 4 -> 5 update preserves original directory, app data, history and restarts paired client'
   )
 
   await writeFile(path.join(portableDir, 'PORTABLE'), '')
+  await checkpoint('verify portable GitHub discovery and manual ZIP download')
   await cp(dataDir, path.join(portableDir, 'data'), { recursive: true })
   const portableConfigPath = path.join(portableDir, 'data/config.yaml')
   await writeFile(
@@ -536,6 +600,7 @@ try {
   assert.equal((await invoke(page, 'windowsUpdateState')).currentRevision, 4)
   await application.close()
   application = undefined
+  await retireLaunchers()
   evidence.tests.push(
     'real portable client discovers GitHub updates and saves verified ZIP without installing'
   )
@@ -545,9 +610,39 @@ try {
     JSON.stringify(evidence, null, 2) + '\n'
   )
   console.log(JSON.stringify(evidence, null, 2))
+} catch (error) {
+  primaryError = error
+  console.error('Windows update acceptance failed:', error)
+  await mkdir(path.join(root, 'dist/validation'), { recursive: true })
+  await writeFile(
+    path.join(root, 'dist/validation/windows-update-e2e-failure.json'),
+    JSON.stringify(
+      {
+        ...evidence,
+        error: error?.stack || String(error),
+        launchers: launchers.map((launcher) => ({
+          pid: launcher.pid,
+          exitCode: launcher.exitCode,
+          signalCode: launcher.signalCode
+        }))
+      },
+      null,
+      2
+    ) + '\n'
+  ).catch((failure) => console.error('Could not save update failure report:', failure))
+  const failedPage = application?.windows()[0]
+  if (failedPage)
+    await failedPage
+      .screenshot({
+        path: path.join(root, 'dist/validation/windows-update-e2e-failure.png'),
+        timeout: 3000
+      })
+      .catch(() => {})
+  throw error
 } finally {
   if (application) await application.close().catch(() => {})
   await scopedProcesses(true).catch(() => {})
+  await retireLaunchers()
   if (fixtureServer) await new Promise((resolve) => fixtureServer.close(resolve))
   const uninstaller = (await readdir(installDir).catch(() => [])).find((name) =>
     /^Uninstall.*\.exe$/.test(name)
@@ -570,5 +665,10 @@ try {
       { recursive: true }
     ).catch(() => {})
   }
-  await rm(work, { recursive: true, force: true })
+  await rm(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(
+    (error) => {
+      console.error('Windows update fixture cleanup failed:', error)
+      if (!primaryError) throw error
+    }
+  )
 }

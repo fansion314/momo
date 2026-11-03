@@ -37,6 +37,32 @@ const ps = path.win32.join(
 const hash = (data) => createHash('sha256').update(data).digest('hex')
 const evidence = { from: oldTag, to: `clash-momo-v${pkg.version}-${revision}`, tests: [] }
 let application
+let primaryError
+const launchers = []
+
+async function checkpoint(stage) {
+  evidence.stage = stage
+  await mkdir(path.join(root, 'dist/validation'), { recursive: true })
+  await writeFile(
+    path.join(root, 'dist/validation/windows-production-upgrade-progress.json'),
+    JSON.stringify(evidence, null, 2) + '\n'
+  )
+  console.log(`Production release upgrade acceptance: ${stage}`)
+}
+
+async function retireLaunchers() {
+  for (const launcher of launchers) {
+    if (launcher.exitCode !== null || launcher.signalCode !== null) continue
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 5000)
+      launcher.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+    if (launcher.exitCode === null && launcher.signalCode === null) launcher.kill()
+  }
+}
 
 async function run(program, args) {
   await new Promise((resolve, reject) => {
@@ -83,6 +109,7 @@ async function launch() {
     cwd: installDir,
     timeout: 45000
   })
+  launchers.push(application.process())
   const page = await application.firstWindow()
   const deadline = Date.now() + 45000
   while (Date.now() < deadline) {
@@ -101,6 +128,7 @@ async function stopOwnedProcesses() {
 }
 
 try {
+  await checkpoint('download and verify the immutable public revision 4 installer')
   await mkdir(downloadDir, { recursive: true })
   const { stdout } = await execFilePromise(
     'gh',
@@ -135,6 +163,7 @@ try {
     new RegExp(`^${hash(oldBytes)}\\s+\\*?${oldName.replaceAll('.', '\\.')}\\s*$`)
   )
   evidence.oldInstallerSha256 = hash(oldBytes)
+  await checkpoint('install and run the actual public revision 4 client and core')
   await install(path.join(downloadDir, oldName))
   // Exercise the unmodified, publicly released application and its own bundled
   // core, producing genuine old-code traffic-history rows before upgrading.
@@ -183,8 +212,11 @@ try {
   const databaseSize = (await stat(path.join(dataDir, 'work/traffic-history.db'))).size
   await application.close()
   application = undefined
+  await retireLaunchers()
+  await checkpoint('manually overwrite the old release in its original directory')
   await install(currentInstaller)
   page = await launch()
+  await checkpoint('verify retained ordinary profile, configuration and traffic history')
   assert.equal((await invoke(page, 'windowsUpdateState')).currentRevision, revision)
   assert.equal((await invoke(page, 'getCurrentProfileItem')).id, 'production-upgrade')
   assert.equal(hash(await readFile(profilePath)), profileHash)
@@ -198,6 +230,7 @@ try {
   )
   await application.close()
   application = undefined
+  await retireLaunchers()
   await run(process.execPath, ['packaging/windows/smoke.mjs', '--installed', installDir])
   evidence.tests.push(
     'GitHub digest and checksum verify unmodified public -4 installer',
@@ -211,9 +244,31 @@ try {
     JSON.stringify(evidence, null, 2) + '\n'
   )
   console.log(JSON.stringify(evidence, null, 2))
+} catch (error) {
+  primaryError = error
+  console.error('Production release upgrade acceptance failed:', error)
+  await mkdir(path.join(root, 'dist/validation'), { recursive: true }).catch(() => {})
+  await writeFile(
+    path.join(root, 'dist/validation/windows-production-upgrade-failure.json'),
+    JSON.stringify(
+      {
+        ...evidence,
+        error: error?.stack || String(error),
+        launchers: launchers.map((launcher) => ({
+          pid: launcher.pid,
+          exitCode: launcher.exitCode,
+          signalCode: launcher.signalCode
+        }))
+      },
+      null,
+      2
+    ) + '\n'
+  ).catch((failure) => console.error('Could not save production upgrade failure report:', failure))
+  throw error
 } finally {
   if (application) await application.close().catch(() => {})
   await stopOwnedProcesses().catch(() => {})
+  await retireLaunchers()
   const uninstaller = (await readdir(installDir).catch(() => [])).find((name) =>
     /^Uninstall.*\.exe$/.test(name)
   )
@@ -226,7 +281,12 @@ try {
     ).catch(() => {})
   }
   await cpLogs()
-  await rm(work, { recursive: true, force: true })
+  await rm(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(
+    (error) => {
+      console.error('Production release upgrade fixture cleanup failed:', error)
+      if (!primaryError) throw error
+    }
+  )
 }
 
 async function cpLogs() {
