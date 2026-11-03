@@ -41,4 +41,6 @@ try {
 Write-Host 'Native Windows install, reinstall, uninstall, portable and bundled-core verification passed.'
 node packaging/windows/update-e2e.mjs
 if ($LASTEXITCODE) { throw 'Windows application update acceptance failed' }
+node packaging/windows/production-upgrade-e2e.mjs
+if ($LASTEXITCODE) { throw 'Windows production release upgrade acceptance failed' }
 Write-Host 'Interactive UAC acceptance/cancellation requires a desktop test; an elevated CI runner does not cover that interaction.'

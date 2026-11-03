@@ -170,6 +170,39 @@ async function close() {
       ),
     'Bundled core cleanup'
   )
+  await waitFor(
+    () =>
+      execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-Command',
+          '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $p=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath } | Select-Object -ExpandProperty ExecutablePath); ConvertTo-Json -InputObject $p -Compress'
+        ],
+        { encoding: 'utf8' }
+      ),
+    (value) =>
+      !JSON.parse(value).some(
+        (file) => file && file.toLowerCase().startsWith(appDir.toLowerCase() + path.sep)
+      ),
+    'All client processes must exit before moving the portable directory'
+  )
+}
+
+async function movePortableDirectory(from, to) {
+  const deadline = Date.now() + 15000
+  while (true) {
+    try {
+      await rename(from, to)
+      return
+    } catch (error) {
+      // Windows can retain file handles briefly after process exit (including
+      // Defender scanning a freshly extracted executable). Still perform the
+      // actual move; an unresolved lock must fail the portable acceptance.
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || Date.now() >= deadline) throw error
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
 }
 try {
   let page = await launch()
@@ -213,7 +246,7 @@ try {
   assert(database.size > 0)
   if (!installed) {
     const moved = path.join(root, '移动后的 便携版')
-    await rename(appDir, moved)
+    await movePortableDirectory(appDir, moved)
     appDir = moved
   }
   page = await launch()
