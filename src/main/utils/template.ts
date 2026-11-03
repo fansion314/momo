@@ -51,6 +51,8 @@ export const defaultConfig: IAppConfig = {
   proxyDisplayMode: 'simple',
   proxyDisplayOrder: 'default',
   autoCheckUpdate: false,
+  windowsAutoCheckUpdate: true,
+  windowsUpdateSource: 'cnb',
   autoUpdateProfileOnStart: true,
   silentUpdate: false,
   autoCloseConnection: true,

@@ -3,6 +3,7 @@ import v8 from 'v8'
 import { readFile } from 'fs/promises'
 import { app, ipcMain } from 'electron'
 import i18next from 'i18next'
+import { registerWindowsUpdateIpc } from '../resolve/windows-updater'
 import {
   macServiceStatus,
   installMacService,
@@ -456,6 +457,7 @@ const syncHandlers: Record<string, SyncFn> = {
 }
 
 export function registerIpcMainHandlers(): void {
+  registerWindowsUpdateIpc()
   registerHandlers(asyncHandlers, true)
   registerHandlers(syncHandlers, false)
 }

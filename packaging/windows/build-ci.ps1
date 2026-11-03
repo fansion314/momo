@@ -2,7 +2,9 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'Windows x64 required' }
 pnpm install --frozen-lockfile --ignore-scripts
-pnpm --package=vite-plus@1.4.0 dlx vp exec vitest run src/main/utils/dirs.test.ts src/main/core/admin.test.ts src/main/core/permissions.test.ts src/main/core/windows-elevation.test.ts
+$env:MOMO_NATIVE_BOOTSTRAP_TEST = '1'
+pnpm --package=vite-plus@1.4.0 dlx vp exec vitest run src/main/utils/dirs.test.ts src/main/core/admin.test.ts src/main/core/permissions.test.ts src/main/core/windows-elevation.test.ts src/main/resolve/windows-update-manifest.test.ts src/main/resolve/windows-update-network.test.ts src/main/resolve/windows-update-install.test.ts src/main/resolve/windows-updater.test.ts src/main/resolve/windows-update-bootstrap.native.test.ts
+Remove-Item Env:MOMO_NATIVE_BOOTSTRAP_TEST
 if ($LASTEXITCODE) { throw 'Windows runtime unit checks failed' }
 node node_modules/electron/install.js
 node scripts/prepare.mjs
@@ -37,4 +39,6 @@ try {
   Remove-Item -LiteralPath $installDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 Write-Host 'Native Windows install, reinstall, uninstall, portable and bundled-core verification passed.'
+node packaging/windows/update-e2e.mjs
+if ($LASTEXITCODE) { throw 'Windows application update acceptance failed' }
 Write-Host 'Interactive UAC acceptance/cancellation requires a desktop test; an elevated CI runner does not cover that interaction.'

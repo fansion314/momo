@@ -42,6 +42,7 @@ import {
   getSystemLanguage
 } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
+import { initWindowsUpdater } from './resolve/windows-updater'
 
 async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
   // 仅 PS 3.0+ 写入 \3\ 键（\1\ 键恒为 2.0，不可用）。
@@ -316,6 +317,7 @@ app
     rendererFirstContentWaiter.startTimeout()
     await rendererFirstContentWaiter.promise
     markInitialRendererReady()
+    initWindowsUpdater()
 
     // 首窗完成加载后再启动磁盘和子进程密集型任务，避免与 renderer 抢占冷启动资源。
     const runtimeInitPromise = startupSafetyPromise

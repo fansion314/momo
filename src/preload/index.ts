@@ -125,6 +125,10 @@ const validInvokeChannels = [
   'setNativeTheme',
   'copyEnv',
   // Update
+  'windowsUpdateState',
+  'checkWindowsUpdate',
+  'downloadWindowsUpdate',
+  'installWindowsUpdate',
   'getVersion',
   'platform',
   // Backup
@@ -200,6 +204,7 @@ const validInvokeChannels = [
 
 // 允许的 on/removeListener channels 白名单
 const validListenChannels = [
+  'windowsUpdateState',
   'mihomoLogs',
   'mihomoConnections',
   'mihomoTraffic',

@@ -369,6 +369,8 @@ interface IAppConfig {
   appTheme: AppTheme
   customTheme?: string
   autoCheckUpdate: boolean
+  windowsAutoCheckUpdate?: boolean
+  windowsUpdateSource?: 'cnb' | 'github'
   autoUpdateProfileOnStart: boolean
   silentUpdate: boolean
   githubProxy?: string

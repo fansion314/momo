@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import BaseConfirmModal from '../base/base-confirm-modal'
+import WindowsUpdateConfig from './windows-update-config'
 
 const Actions: React.FC = () => {
   const { t } = useTranslation()
@@ -33,28 +34,20 @@ const Actions: React.FC = () => {
             {t('actions.guide.button')}
           </Button>
         </SettingItem>
-        <SettingItem
-          title={t('settings.systemPackageUpdates', {
-            context: platform === 'darwin' ? 'macos' : platform === 'win32' ? 'windows' : undefined
-          })}
-          divider
-        >
-          {platform === 'win32' ? (
-            <Button
-              as="a"
-              size="sm"
-              href="https://github.com/fansion314/momo/releases?q=clash-momo-v&expanded=true"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t('settings.downloadClientRelease')}
-            </Button>
-          ) : (
+        {platform === 'win32' ? (
+          <WindowsUpdateConfig />
+        ) : (
+          <SettingItem
+            title={t('settings.systemPackageUpdates', {
+              context: platform === 'darwin' ? 'macos' : undefined
+            })}
+            divider
+          >
             <code className="min-w-0 text-right text-xs whitespace-normal break-words">
               {platform === 'darwin' ? 'brew upgrade clash-momo mihomomo' : 'pacman -Syu'}
             </code>
-          )}
-        </SettingItem>
+          </SettingItem>
+        )}
         <SettingItem
           title={t('actions.reset.title')}
           actions={

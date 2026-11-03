@@ -1,4 +1,5 @@
 import { resolve } from 'path'
+import { readFileSync } from 'node:fs'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -16,12 +17,16 @@ const monacoEditorPlugin = isObjectWithDefaultFunction(monacoEditorPluginModule)
   : monacoEditorPluginModule
 
 // Win7 build: bundle all deps (Vite converts ESM→CJS), only externalize native modules
+const revision = Number(
+  readFileSync('packaging/arch/PKGBUILD', 'utf8').match(/^pkgrel=(\d+)$/m)?.[1]
+)
+if (!Number.isSafeInteger(revision) || revision < 1) throw new Error('Invalid application revision')
 const isLegacyBuild = process.env.LEGACY_BUILD === 'true'
 const legacyExternal = ['sysproxy-rs', 'electron', 'utf-8-validate', 'bufferutil']
 
 export default defineConfig({
   main: {
-    define: { __LEGACY_BUILD__: JSON.stringify(isLegacyBuild) },
+    define: { __LEGACY_BUILD__: JSON.stringify(isLegacyBuild), __APP_REVISION__: revision },
     plugins: isLegacyBuild ? [] : [externalizeDepsPlugin()],
     build: isLegacyBuild
       ? { rollupOptions: { external: legacyExternal, output: { format: 'cjs' } } }

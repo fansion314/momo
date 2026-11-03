@@ -1,4 +1,5 @@
 import { TitleBarOverlayOptions } from 'electron'
+import type { WindowsUpdateState } from '../../../shared/windows-update'
 import type { MacServiceStatus } from '../../../shared/macos-service'
 import type { IPInfo, IPProvider } from '../../../shared/network-info'
 import type { MediaUnlockItem, MediaUnlockName } from '../../../shared/media-unlock'
@@ -211,6 +212,10 @@ interface IpcApi {
   setNativeTheme: (theme: 'system' | 'light' | 'dark') => Promise<void>
   copyEnv: (type: 'bash' | 'cmd' | 'powershell' | 'fish' | 'nushell') => Promise<void>
   // Update
+  windowsUpdateState: () => Promise<WindowsUpdateState>
+  checkWindowsUpdate: () => Promise<WindowsUpdateState>
+  downloadWindowsUpdate: () => Promise<WindowsUpdateState>
+  installWindowsUpdate: () => Promise<WindowsUpdateState>
   getVersion: () => Promise<string>
   platform: () => Promise<NodeJS.Platform>
   // Backup
@@ -413,6 +418,10 @@ export const {
   setNativeTheme,
   copyEnv,
   // Update
+  windowsUpdateState,
+  checkWindowsUpdate,
+  downloadWindowsUpdate,
+  installWindowsUpdate,
   getVersion,
   // Backup
   webdavBackup,
