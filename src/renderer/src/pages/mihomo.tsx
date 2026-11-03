@@ -224,9 +224,10 @@ const Mihomo: React.FC = () => {
           <div className="rounded-md border border-primary-200 p-2">
             <SettingItem
               title={t(platform === 'win32' ? 'mihomo.bundledCore' : 'mihomo.systemCore')}
+              wrapTitle
               divider
             >
-              <span className="text-xs text-default-500">
+              <span className="min-w-0 break-words text-xs text-default-500">
                 {t('mihomo.systemCoreDescription', {
                   context:
                     platform === 'darwin' ? 'macos' : platform === 'win32' ? 'windows' : undefined

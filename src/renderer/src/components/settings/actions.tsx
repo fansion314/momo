@@ -41,6 +41,7 @@ const Actions: React.FC = () => {
             title={t('settings.systemPackageUpdates', {
               context: platform === 'darwin' ? 'macos' : undefined
             })}
+            wrapTitle
             divider
           >
             <code className="min-w-0 text-right text-xs whitespace-normal break-words">
