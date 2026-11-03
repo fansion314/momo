@@ -119,7 +119,7 @@ fn locked<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>> {
 }
 
 impl Service {
-    fn new(root: &Path, installation: Installation) -> Result<Arc<Self>> {
+    pub(crate) fn new(root: &Path, installation: Installation) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             root: root.to_owned(),
             lifecycle: Mutex::new(Lifecycle::new(root, installation)?),

@@ -361,6 +361,7 @@ impl Lifecycle {
                 "core is not running"
             }
         );
+        let previous_key = Zeroizing::new(self.key.to_string());
         let mut transaction = input.stage(&self.root, cancelled)?;
         let work = self.root.join("data");
         let core = self.root.join("mihomomo");
@@ -381,36 +382,55 @@ impl Lifecycle {
         }
         install::run_quiet(cmd, Duration::from_secs(30), cancelled)
             .map_err(|_| anyhow::anyhow!("managed core rejected configuration snapshot"))?;
-        let result = if start {
-            self.start(shared, &input.key, cancelled)
-        } else if *input.key != *self.key {
-            let previous = Zeroizing::new(self.key.to_string());
-            let updated = self
-                .stop(shared)
-                .and_then(|_| self.start(shared, &input.key, cancelled));
-            if let Err(error) = updated {
-                transaction.rollback()?;
-                self.start(shared, &previous, cancelled)
-                    .context("cannot resume previous managed core")?;
-                return Err(error);
+        let applied = (|| -> Result<()> {
+            if start {
+                self.start(shared, &input.key, cancelled)?;
+            } else if *input.key != *self.key {
+                self.stop(shared)?;
+                self.start(shared, &input.key, cancelled)?;
+            } else {
+                let body =
+                    serde_json::to_vec(&serde_json::json!({"path":work.join("config.yaml")}))?;
+                let status = core_request(
+                    &work.join("core.sock"),
+                    "PUT",
+                    "/configs?force=true",
+                    Some(&body),
+                    Duration::from_secs(30),
+                    cancelled,
+                )?;
+                ensure!(status < 300, "core rejected configuration reload");
             }
-            Ok(())
-        } else {
-            let body = serde_json::to_vec(&serde_json::json!({"path":work.join("config.yaml")}))?;
-            let status = core_request(
-                &work.join("core.sock"),
-                "PUT",
-                "/configs?force=true",
-                Some(&body),
-                Duration::from_secs(30),
-                cancelled,
-            )?;
-            ensure!(status < 300, "core rejected configuration reload");
-            Ok(())
-        };
-        result?;
-        transaction.commit()?;
-        files::atomic_write(&self.root.join("migrated"), b"1", 0o600)?;
+            ensure!(!cancelled.load(Ordering::Acquire), "snapshot cancelled");
+            transaction.commit()
+        })();
+        if let Err(error) = applied {
+            if let Err(stopping) = self.stop(shared) {
+                let retained = transaction.retain_for_recovery();
+                return Err(error).context(format!(
+                    "cannot stop core after snapshot failure; protected recovery backups: {retained:?}: {stopping:#}"
+                ));
+            }
+            if let Err(rollback) = transaction.rollback() {
+                let network = self.network.restore().err();
+                return Err(error).context(format!(
+                    "cannot restore snapshot files and metadata: {rollback:#}; network restoration error: {network:?}"
+                ));
+            }
+            if !start && !cancelled.load(Ordering::Acquire) {
+                if let Err(restarting) = self.start(shared, &previous_key, cancelled) {
+                    let _ = self.network.restore();
+                    return Err(error).context(format!(
+                        "snapshot files restored but previous managed core could not resume: {restarting:#}"
+                    ));
+                }
+            } else {
+                self.network
+                    .restore()
+                    .context("snapshot failed and network restoration failed")?;
+            }
+            return Err(error).context("snapshot rejected; previous state restored");
+        }
         Ok(())
     }
 }

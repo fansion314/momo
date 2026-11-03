@@ -305,6 +305,9 @@ pub struct Transaction {
     manifest_path: PathBuf,
     manifest_original: Option<Vec<u8>>,
     manifest_touched: bool,
+    migration_path: PathBuf,
+    migration_original: Option<Vec<u8>>,
+    migration_touched: bool,
     finished: bool,
     work: ProtectedDir,
     backups: ProtectedDir,
@@ -329,6 +332,17 @@ impl Snapshot {
             Some(bytes) => serde_json::from_slice(bytes)?,
             None => BTreeMap::new(),
         };
+        let migration_path = root.join("migrated");
+        let migration_original = if migration_path.try_exists()? {
+            let mut bytes = Vec::new();
+            files::checked_open(&migration_path)?
+                .take(16385)
+                .read_to_end(&mut bytes)?;
+            ensure!(bytes.len() <= 16384, "migration marker exceeds limit");
+            Some(bytes)
+        } else {
+            None
+        };
         let directory = tempfile::Builder::new()
             .prefix(".momo-transaction-")
             .tempdir_in(root)?;
@@ -340,6 +354,9 @@ impl Snapshot {
             manifest_path,
             manifest_original,
             manifest_touched: false,
+            migration_path,
+            migration_original,
+            migration_touched: false,
             finished: false,
             work: work_directory,
             backups,
@@ -386,11 +403,27 @@ impl Transaction {
         Ok(())
     }
     pub fn commit(&mut self) -> Result<()> {
+        #[cfg(test)]
+        COMMIT_CANCELLATION.with(|cancelled| {
+            if let Some(cancelled) = cancelled.borrow_mut().take() {
+                cancelled.store(true, Ordering::Release);
+            }
+        });
         self.manifest_touched = true;
+        #[cfg(test)]
+        inject_commit_failure(CommitFailure::Imports);
         files::write_json(&self.manifest_path, &self.manifest)?;
+        self.migration_touched = true;
+        #[cfg(test)]
+        inject_commit_failure(CommitFailure::Migration);
+        files::atomic_write(&self.migration_path, b"1", 0o600)?;
         self.finished = true;
         self.directory.take();
         Ok(())
+    }
+    pub fn retain_for_recovery(&mut self) -> Option<PathBuf> {
+        self.finished = true;
+        self.directory.take().map(tempfile::TempDir::keep)
     }
     pub fn rollback(&mut self) -> Result<()> {
         if self.finished {
@@ -430,6 +463,20 @@ impl Transaction {
                 error = Some(e);
             }
         }
+        if self.migration_touched {
+            let restored = match &self.migration_original {
+                Some(bytes) => files::atomic_write(&self.migration_path, bytes, 0o600),
+                None => ProtectedDir::open(
+                    self.migration_path
+                        .parent()
+                        .context("migration parent missing")?,
+                )?
+                .remove_file(Path::new("migrated")),
+            };
+            if let Err(e) = restored {
+                error = Some(e);
+            }
+        }
         self.finished = true;
         if let Some(error) = error {
             if let Some(directory) = self.directory.take() {
@@ -440,6 +487,39 @@ impl Transaction {
         self.directory.take();
         Ok(())
     }
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum CommitFailure {
+    Imports,
+    Migration,
+}
+
+#[cfg(test)]
+thread_local! {
+    static COMMIT_FAILURE: std::cell::Cell<Option<CommitFailure>> = const { std::cell::Cell::new(None) };
+    static COMMIT_CANCELLATION: std::cell::RefCell<Option<Arc<AtomicBool>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub fn fail_next_commit(point: CommitFailure) {
+    COMMIT_FAILURE.with(|failure| failure.set(Some(point)));
+}
+
+#[cfg(test)]
+pub fn cancel_on_next_commit(cancelled: Arc<AtomicBool>) {
+    COMMIT_CANCELLATION.with(|target| *target.borrow_mut() = Some(cancelled));
+}
+
+#[cfg(test)]
+fn inject_commit_failure(point: CommitFailure) {
+    COMMIT_FAILURE.with(|failure| {
+        if failure.get() == Some(point) {
+            failure.set(None);
+            crate::dirfd::fail_next_rename_sync();
+        }
+    });
 }
 impl Drop for Transaction {
     fn drop(&mut self) {
