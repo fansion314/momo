@@ -223,8 +223,8 @@ public class MomoUpdateFixture {
         expect(restarted[0]).toBe(application)
         expect(restarted[1]).toContain('--updated')
         expect(restarted.slice(3, 7)).toEqual(caller.slice(3, 7))
-        expect(path.resolve(restarted[7]).toLowerCase()).toBe(
-          path.resolve(installDirectory).toLowerCase()
+        expect((await realpath(restarted[7])).toLowerCase()).toBe(
+          (await realpath(installDirectory)).toLowerCase()
         )
         let completion:
           { status: string; application: string; installerExitCode: number } | undefined
