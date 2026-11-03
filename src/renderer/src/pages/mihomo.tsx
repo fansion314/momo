@@ -222,8 +222,16 @@ const Mihomo: React.FC = () => {
         {/* Smart 内核设置 */}
         <SettingCard>
           <div className="rounded-md border border-primary-200 p-2">
-            <SettingItem title={t('mihomo.systemCore')} divider>
-              <span className="text-xs text-default-500">{t('mihomo.systemCoreDescription')}</span>
+            <SettingItem
+              title={t(platform === 'win32' ? 'mihomo.bundledCore' : 'mihomo.systemCore')}
+              divider
+            >
+              <span className="text-xs text-default-500">
+                {t('mihomo.systemCoreDescription', {
+                  context:
+                    platform === 'darwin' ? 'macos' : platform === 'win32' ? 'windows' : undefined
+                })}
+              </span>
             </SettingItem>
 
             {/* Smart 覆写开关 */}

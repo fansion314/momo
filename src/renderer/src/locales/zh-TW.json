@@ -1064,5 +1064,11 @@
   "traffic.history.applyExact": "精确筛选",
   "traffic.history.timezoneUnavailable": "历史数据库使用的固定时区无法由此客户端解析，无法可靠划分自然日。连接明细仍可查询；请勿将每日汇总当作 UTC 时间。",
   "traffic.history.frozenFlowRange": "翻页及自动刷新时固定此时间范围；手动刷新回到第一页并更新范围。",
-  "traffic.history.invalidChain": "完整代理链须为按顺序排列的 JSON 字符串数组，例如 [\"节点\",\"策略\"]，未记录的链可使用 null。"
+  "traffic.history.invalidChain": "完整代理链须为按顺序排列的 JSON 字符串数组，例如 [\"节点\",\"策略\"]，未记录的链可使用 null。",
+  "settings.systemPackageUpdates_macos": "用戶端和核心透過 Homebrew 更新。",
+  "settings.systemPackageUpdates_windows": "用戶端更新包含配套核心。",
+  "settings.downloadClientRelease": "下載用戶端更新",
+  "mihomo.bundledCore": "內建 mihomomo / Smart",
+  "mihomo.systemCoreDescription_macos": "使用 /opt/homebrew/opt/mihomomo/bin/mihomomo；透過 Homebrew 更新後，請點選「更新網路服務」同步受保護的核心副本。",
+  "mihomo.systemCoreDescription_windows": "使用用戶端內建的 mihomomo.exe；核心隨用戶端一併更新，無需單獨安裝。"
 }

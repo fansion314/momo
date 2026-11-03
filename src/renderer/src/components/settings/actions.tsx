@@ -1,7 +1,7 @@
 import { Button, Tooltip } from '@heroui/react'
 import { createHeapSnapshot, quitApp, quitWithoutCore, resetAppConfig } from '@renderer/utils/ipc'
 import { useState } from 'react'
-import { version } from '@renderer/utils/init'
+import { platform, version } from '@renderer/utils/init'
 import { IoIosHelpCircle } from 'react-icons/io'
 import { getDriver } from '@renderer/App'
 import { useTranslation } from 'react-i18next'
@@ -33,8 +33,27 @@ const Actions: React.FC = () => {
             {t('actions.guide.button')}
           </Button>
         </SettingItem>
-        <SettingItem title={t('settings.systemPackageUpdates')} divider>
-          <code>pacman -Syu</code>
+        <SettingItem
+          title={t('settings.systemPackageUpdates', {
+            context: platform === 'darwin' ? 'macos' : platform === 'win32' ? 'windows' : undefined
+          })}
+          divider
+        >
+          {platform === 'win32' ? (
+            <Button
+              as="a"
+              size="sm"
+              href="https://github.com/fansion314/momo/releases?q=clash-momo-v&expanded=true"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('settings.downloadClientRelease')}
+            </Button>
+          ) : (
+            <code className="min-w-0 text-right text-xs whitespace-normal break-words">
+              {platform === 'darwin' ? 'brew upgrade clash-momo mihomomo' : 'pacman -Syu'}
+            </code>
+          )}
         </SettingItem>
         <SettingItem
           title={t('actions.reset.title')}

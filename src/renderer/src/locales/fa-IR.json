@@ -1041,5 +1041,11 @@
   "traffic.history.applyExact": "Apply exact filter",
   "traffic.history.timezoneUnavailable": "The saved history timezone cannot be resolved by this client, so calendar-day bounds are unavailable. Connection details remain available.",
   "traffic.history.frozenFlowRange": "This range stays fixed while browsing and refreshing pages. Refresh returns to page one with current bounds.",
-  "traffic.history.invalidChain": "Enter the ordered chain as a JSON array of strings, such as [\"node\",\"policy\"], or null for an unrecorded chain."
+  "traffic.history.invalidChain": "Enter the ordered chain as a JSON array of strings, such as [\"node\",\"policy\"], or null for an unrecorded chain.",
+  "settings.systemPackageUpdates_macos": "به‌روزرسانی برنامه و هسته با Homebrew مدیریت می‌شود.",
+  "settings.systemPackageUpdates_windows": "به‌روزرسانی برنامه شامل هسته سازگار است.",
+  "settings.downloadClientRelease": "دریافت به‌روزرسانی برنامه",
+  "mihomo.bundledCore": "mihomomo / Smart داخلی",
+  "mihomo.systemCoreDescription_macos": "از /opt/homebrew/opt/mihomomo/bin/mihomomo استفاده می‌شود. پس از به‌روزرسانی Homebrew، سرویس شبکه را به‌روز کنید تا نسخه محافظت‌شده هسته همگام شود.",
+  "mihomo.systemCoreDescription_windows": "از mihomomo.exe داخلی استفاده می‌شود. هسته همراه برنامه به‌روز می‌شود و نصب جداگانه لازم نیست."
 }

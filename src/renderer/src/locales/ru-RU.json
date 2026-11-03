@@ -1047,5 +1047,11 @@
   "traffic.history.applyExact": "Apply exact filter",
   "traffic.history.timezoneUnavailable": "The saved history timezone cannot be resolved by this client, so calendar-day bounds are unavailable. Connection details remain available.",
   "traffic.history.frozenFlowRange": "This range stays fixed while browsing and refreshing pages. Refresh returns to page one with current bounds.",
-  "traffic.history.invalidChain": "Enter the ordered chain as a JSON array of strings, such as [\"node\",\"policy\"], or null for an unrecorded chain."
+  "traffic.history.invalidChain": "Enter the ordered chain as a JSON array of strings, such as [\"node\",\"policy\"], or null for an unrecorded chain.",
+  "settings.systemPackageUpdates_macos": "Клиент и ядро обновляются через Homebrew.",
+  "settings.systemPackageUpdates_windows": "Обновление клиента включает совместимое ядро.",
+  "settings.downloadClientRelease": "Скачать обновление клиента",
+  "mihomo.bundledCore": "Встроенное mihomomo / Smart",
+  "mihomo.systemCoreDescription_macos": "Используется /opt/homebrew/opt/mihomomo/bin/mihomomo. После обновления Homebrew обновите сетевую службу, чтобы синхронизировать защищённую копию ядра.",
+  "mihomo.systemCoreDescription_windows": "Используется встроенное mihomomo.exe. Ядро обновляется вместе с клиентом; отдельная установка не требуется."
 }

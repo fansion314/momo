@@ -1103,5 +1103,11 @@
   "traffic.embedded.high": "高",
   "traffic.embedded.ruleHelp": "按命中规则的顶层策略分组；关联明细中可查看原始规则类型与代理链。",
   "traffic.embedded.unhealthy": "记录器当前状态异常，显示的数据可能不完整。",
-  "traffic.embedded.matchedRules": "命中规则"
+  "traffic.embedded.matchedRules": "命中规则",
+  "settings.systemPackageUpdates_macos": "客户端和内核通过 Homebrew 更新。",
+  "settings.systemPackageUpdates_windows": "客户端更新包含配套内核。",
+  "settings.downloadClientRelease": "下载客户端更新",
+  "mihomo.bundledCore": "内置 mihomomo / Smart",
+  "mihomo.systemCoreDescription_macos": "使用 /opt/homebrew/opt/mihomomo/bin/mihomomo；通过 Homebrew 更新后，请点击“更新网络服务”同步受保护的内核副本。",
+  "mihomo.systemCoreDescription_windows": "使用客户端内置的 mihomomo.exe；内核随客户端整体更新，无需单独安装。"
 }

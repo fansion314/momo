@@ -1103,5 +1103,11 @@
   "traffic.embedded.high": "High",
   "traffic.embedded.ruleHelp": "Grouped by the top-level policy targeted by matched rules. Related details show original rule types and proxy chains.",
   "traffic.embedded.unhealthy": "The recorder is unhealthy. Displayed data may be incomplete.",
-  "traffic.embedded.matchedRules": "Matched rules"
+  "traffic.embedded.matchedRules": "Matched rules",
+  "settings.systemPackageUpdates_macos": "Client and core updates are managed by Homebrew.",
+  "settings.systemPackageUpdates_windows": "Client updates include the paired core.",
+  "settings.downloadClientRelease": "Download client update",
+  "mihomo.bundledCore": "Bundled mihomomo / Smart",
+  "mihomo.systemCoreDescription_macos": "Uses /opt/homebrew/opt/mihomomo/bin/mihomomo. After a Homebrew update, use Update Network Service to synchronize the protected core copy.",
+  "mihomo.systemCoreDescription_windows": "Uses the bundled mihomomo.exe. The core updates with the client; no separate installation is needed."
 }
