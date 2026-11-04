@@ -70,7 +70,8 @@ import {
   expectMacServiceCore,
   restoreMacServiceNetwork
 } from './macos-service'
-import { createMacCoreSnapshot } from './macos-snapshot'
+import { createMacCoreSnapshot, referencedUserResourceDirectories } from './macos-snapshot'
+import { parse } from '../utils/yaml'
 import { startMacExternalController, stopMacExternalController } from './macos-controller'
 
 // 重新导出权限相关函数
@@ -1129,12 +1130,19 @@ async function checkProfile(
   await checkProfileConfig(
     diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work'),
     core,
-    ageSecretKey
+    ageSecretKey,
+    isMacServiceActive()
+      ? {
+          workDir: diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(),
+          allowUserResources: true
+        }
+      : {}
   )
 }
 
 export interface CheckProfileOptions {
   workDir?: string
+  allowUserResources?: boolean
   // 调用方的预算 signal：中止后校验子进程被终止，校验按失败处理（调用方不得再写入）
   signal?: AbortSignal
   // 校验子进程的硬上限（毫秒）：防止一次 `-t` 无限期占住调用方持有的锁
@@ -1149,6 +1157,18 @@ export async function checkProfileConfig(
 ): Promise<void> {
   const corePath = mihomoCorePath(core)
   await syncSmartModelToTestDir()
+  const env = buildCoreEnv(mihomoWorkDir(), ageSecretKey)
+  if (opts.allowUserResources && process.getuid?.() !== 0) {
+    // This validator runs as the ordinary user. Grant only referenced resource
+    // directories; the privileged core still receives materialized snapshots.
+    const profile = parse(await readFile(configPath, 'utf8'))
+    env.SAFE_PATHS = [
+      ...new Set([
+        ...(env.SAFE_PATHS?.split(path.delimiter).filter(Boolean) || []),
+        ...referencedUserResourceDirectories(profile, opts.workDir || path.dirname(configPath))
+      ])
+    ].join(path.delimiter)
+  }
 
   try {
     await execFilePromise(
@@ -1157,7 +1177,7 @@ export async function checkProfileConfig(
       {
         // Validation uses a separate home, while native history always lives in work/.
         // Grant that application-owned directory without disabling the core path guard.
-        env: buildCoreEnv(mihomoWorkDir(), ageSecretKey),
+        env,
         signal: opts.signal,
         timeout: opts.timeoutMs
       }

@@ -148,7 +148,10 @@ export async function handleMacControllerRequest(
       const file = path.join(staging, 'config.yaml')
       await writeFile(file, text, { mode: 0o600 })
       const { checkProfileConfig, applyExternalCoreConfig } = await import('./manager')
-      await checkProfileConfig(file, 'mihomomo', undefined, { workDir: baseDir })
+      await checkProfileConfig(file, 'mihomomo', undefined, {
+        workDir: baseDir,
+        allowUserResources: true
+      })
       await applyExternalCoreConfig(async () => {
         const status = await macServiceStatus()
         if (!status.workDir) throw new Error('Service work directory is unavailable')

@@ -15,6 +15,30 @@ export interface MacCoreSnapshot {
   ageSecretKey?: string
 }
 const MAX_BYTES = 512 * 1024 * 1024
+const RESOURCE_KEYS = ['path', 'certificate', 'private-key', 'client-auth-cert', 'ech-key']
+
+export function referencedUserResourceDirectories(value: unknown, baseDir: string): string[] {
+  const directories = new Set<string>()
+  function visit(value: unknown): void {
+    if (!value || typeof value !== 'object') return
+    for (const [key, item] of Object.entries(value)) {
+      if (key === 'custom-certifactes' && Array.isArray(item)) {
+        item.forEach((certificate) => visit({ certificate }))
+      } else if (
+        RESOURCE_KEYS.includes(key) &&
+        typeof item === 'string' &&
+        item &&
+        !item.includes('\n') &&
+        !item.includes('-----BEGIN') &&
+        !item.includes('://')
+      ) {
+        directories.add(path.dirname(path.resolve(baseDir, item)))
+      } else visit(item)
+    }
+  }
+  visit(value)
+  return [...directories]
+}
 export interface SnapshotResource {
   source: string
   digest?: string
@@ -217,7 +241,7 @@ export async function createMacCoreSnapshot(
         continue
       }
       if (
-        ['path', 'certificate', 'private-key', 'client-auth-cert', 'ech-key'].includes(key) &&
+        RESOURCE_KEYS.includes(key) &&
         typeof item === 'string' &&
         item &&
         !item.includes('-----BEGIN') &&

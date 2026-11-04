@@ -1,4 +1,6 @@
 import path from 'node:path'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ execFile: vi.fn(), syncModel: vi.fn() }))
@@ -38,6 +40,27 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('native profile validation safe paths', () => {
+  it('grants explicitly referenced user resource directories only to ordinary validation', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'momo-validation-'))
+    try {
+      const file = path.join(directory, 'candidate.yaml')
+      await writeFile(
+        file,
+        'proxy-providers:\n  local:\n    type: file\n    path: /user/custom/provider.yaml\ntls:\n  certificate: /user/certs/cert.pem\n'
+      )
+      const { checkProfileConfig } = await import('./manager')
+      await checkProfileConfig(file, 'mihomomo', undefined, {
+        allowUserResources: true,
+        workDir: directory
+      })
+      expect(mocks.execFile.mock.calls[0][2].env.SAFE_PATHS.split(path.delimiter)).toEqual(
+        expect.arrayContaining(['/user/custom', '/user/certs'])
+      )
+      expect(mocks.execFile.mock.calls[0][2].env.SKIP_SAFE_PATH_CHECK).toBeUndefined()
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
   it.each([undefined, '/tmp/clash-momo-validation/work', '/tmp/isolated-candidate-home'])(
     'allows the fixed history database when validation home is %s',
     async (workDir) => {
