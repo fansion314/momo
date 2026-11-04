@@ -285,7 +285,7 @@ export async function createMacCoreSnapshot(
     }
   }
   await collect(sourceRoot)
-  for (const name of ['traffic-history.db', 'cache.db', 'Model.bin'])
+  for (const name of ['traffic-history.db', 'cache.db', 'smart.db', 'Model.bin'])
     resourceMap[name] ||= { source: path.join(sourceRoot, name) }
   const snapshot: MacCoreSnapshot = {
     config: stringify(rewriteManagedPaths(config, sourceRoot, destinationRoot)),

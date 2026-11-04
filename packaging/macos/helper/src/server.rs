@@ -493,6 +493,9 @@ impl Service {
                         "cache.db",
                         "cache.db-wal",
                         "cache.db-shm",
+                        "smart.db",
+                        "smart.db-wal",
+                        "smart.db-shm",
                     ]
                     .into_iter()
                     .map(str::to_owned)

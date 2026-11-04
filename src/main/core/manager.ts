@@ -187,6 +187,14 @@ function cancelAutomaticRestart(): void {
   automaticRestartController = null
 }
 
+export function applyExternalCoreConfig(operation: () => Promise<void>): Promise<void> {
+  ensureCoreOperationAllowed()
+  return runCoreOperation(async () => {
+    ensureCoreOperationAllowed()
+    await operation()
+  })
+}
+
 function stopCoreProcessWatchdog(corePid?: number): void {
   const watchdog = coreProcessWatchdog
   if (!watchdog || (corePid !== undefined && watchdog.corePid !== corePid)) return

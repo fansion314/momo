@@ -30,7 +30,12 @@ vi.mock('./macos-service', () => ({
   macServiceStatus: async () => ({ workDir: '/protected', dataMigrated: true }),
   installMacService: vi.fn()
 }))
-vi.mock('./manager', () => ({ checkProfileConfig: mocks.validate, restartCore: mocks.restart }))
+vi.mock('./manager', () => ({
+  checkProfileConfig: mocks.validate,
+  restartCore: mocks.restart,
+  applyExternalCoreConfig: async (operation: () => Promise<void>) => operation()
+}))
+vi.mock('../window', () => ({ mainWindow: null }))
 import {
   startMacExternalController,
   stopMacExternalController,

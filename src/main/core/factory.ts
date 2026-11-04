@@ -231,6 +231,12 @@ export async function generateProfile(
   const partialProfile = profile as Partial<IMihomoConfig>
   if (profile['external-controller'] === '') {
     delete partialProfile['external-controller']
+  }
+  if (
+    !profile['external-controller'] &&
+    !profile['external-controller-tls'] &&
+    !profile['external-controller-unix']
+  ) {
     delete partialProfile['external-ui']
     delete partialProfile['external-ui-url']
     delete partialProfile['external-controller-cors']

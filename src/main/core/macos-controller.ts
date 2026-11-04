@@ -147,34 +147,39 @@ export async function handleMacControllerRequest(
     try {
       const file = path.join(staging, 'config.yaml')
       await writeFile(file, text, { mode: 0o600 })
-      const { checkProfileConfig } = await import('./manager')
+      const { checkProfileConfig, applyExternalCoreConfig } = await import('./manager')
       await checkProfileConfig(file, 'mihomomo', undefined, { workDir: baseDir })
-      const status = await macServiceStatus()
-      if (!status.workDir) throw new Error('Service work directory is unavailable')
-      const snapshot = await createMacCoreSnapshot(
-        mihomoWorkDir(),
-        file,
-        status.workDir,
-        undefined,
-        status.dataMigrated,
-        baseDir
-      )
-      await macServiceRequest('/v1/core/config', snapshot, 60000)
-      rememberMacResources(snapshot)
-      const current = await getRuntimeConfig()
-      // Full core reload does not recreate controller listeners in Mihomo.
-      for (const key of [
-        'external-controller',
-        'external-controller-tls',
-        'external-controller-unix',
-        'external-controller-cors',
-        'external-ui',
-        'external-ui-url',
-        'secret'
-      ] as const) {
-        if (Object.hasOwn(current, key)) Object.assign(profile, { [key]: current[key] })
-      }
-      setAppliedRuntimeConfig(profile)
+      await applyExternalCoreConfig(async () => {
+        const status = await macServiceStatus()
+        if (!status.workDir) throw new Error('Service work directory is unavailable')
+        const snapshot = await createMacCoreSnapshot(
+          mihomoWorkDir(),
+          file,
+          status.workDir,
+          undefined,
+          status.dataMigrated,
+          baseDir
+        )
+        await macServiceRequest('/v1/core/config', snapshot, 60000)
+        rememberMacResources(snapshot)
+        const current = await getRuntimeConfig()
+        // Full core reload does not recreate controller listeners in Mihomo.
+        for (const key of [
+          'external-controller',
+          'external-controller-tls',
+          'external-controller-unix',
+          'external-controller-cors',
+          'external-ui',
+          'external-ui-url',
+          'secret'
+        ] as const) {
+          if (Object.hasOwn(current, key)) Object.assign(profile, { [key]: current[key] })
+        }
+        setAppliedRuntimeConfig(profile)
+        const { mainWindow } = await import('../window')
+        mainWindow?.webContents.send('groupsUpdated')
+        mainWindow?.webContents.send('rulesUpdated')
+      })
     } finally {
       await rm(staging, { recursive: true, force: true })
     }
