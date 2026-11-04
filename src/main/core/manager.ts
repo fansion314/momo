@@ -30,6 +30,7 @@ import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
 import { createCoreLogWritableStream } from '../utils/logFile'
+import { parse } from '../utils/yaml'
 import {
   startMihomoTraffic,
   startMihomoConnections,
@@ -71,7 +72,6 @@ import {
   restoreMacServiceNetwork
 } from './macos-service'
 import { createMacCoreSnapshot, referencedUserResourceDirectories } from './macos-snapshot'
-import { parse } from '../utils/yaml'
 import { startMacExternalController, stopMacExternalController } from './macos-controller'
 
 // 重新导出权限相关函数

@@ -39,8 +39,14 @@ async function waitFor(fn, predicate, label) {
   }
   throw new Error(`${label}: ${JSON.stringify(last)}`)
 }
-const invoke = (page, name, ...args) =>
-  page.evaluate(({ name, args }) => window.api[name](...args), { name, args })
+const invoke = async (page, name, ...args) => {
+  const value = await page.evaluate(
+    ({ name, args }) => window.electron.ipcRenderer.invoke(name, ...args),
+    { name, args }
+  )
+  if (value?.invokeError) throw new Error(`${name}: ${value.invokeError}`)
+  return value
+}
 try {
   const port = await availablePort()
   const controller = `http://127.0.0.1:${port}`
