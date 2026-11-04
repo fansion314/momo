@@ -12,6 +12,7 @@ import { parse } from '../utils/yaml'
 import { getRuntimeConfig, setAppliedRuntimeConfig } from './factory'
 import {
   createExternalController,
+  controllerClientAuth,
   readControllerJSON,
   type ControllerReply
 } from './external-controller'
@@ -66,19 +67,19 @@ export async function startMacExternalController(baseDir = mihomoWorkDir()): Pro
       const pem = async (value: string): Promise<string | Buffer> =>
         value.includes('-----BEGIN') ? value : readFile(path.resolve(baseDir, value))
       const clientCert = config.tls?.['client-auth-cert']
-      const auth = config.tls?.['client-auth-type'] || 'no-client-cert'
+      const auth = controllerClientAuth(config.tls?.['client-auth-type'], Boolean(clientCert))
       controllers.push(
         await createExternalController({
           ...common,
           address: config['external-controller-tls'],
-          requireClientCertificate: auth === 'require-any-client-cert',
-          verifyClientCertificateIfGiven: auth === 'verify-client-cert-if-given',
+          requireClientCertificate: auth.requireClientCertificate,
+          verifyClientCertificateIfGiven: auth.verifyClientCertificateIfGiven,
           tls: {
             cert: await pem(certificate),
             key: await pem(key),
             ca: clientCert ? await pem(clientCert) : undefined,
-            requestCert: auth !== 'no-client-cert',
-            rejectUnauthorized: auth === 'require-and-verify-client-cert'
+            requestCert: auth.requestCert,
+            rejectUnauthorized: auth.rejectUnauthorized
           }
         })
       )

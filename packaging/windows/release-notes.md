@@ -1,6 +1,7 @@
-Clash Momo 2.0.4-6（macOS r6），配套内核为 Mihomomo 1.19.33-5。
+Clash Momo 2.0.4-7（macOS r7），配套内核为 Mihomomo 1.19.33-5。
 
 - 修复 macOS 中文、空格、Emoji 和带斜杠分组的节点切换、测速、Provider 更新及 Smart 权重访问。
+- 修正 TLS 客户端证书校验模式与内核选项的兼容，提供真实双向 TLS 连接回归。
 - 恢复 macOS TCP/TLS/Unix 外部控制器，支持密钥、CORS、HTTP/WebSocket、WebUI 静态面板和下载更新。
 - 补齐取消固定、规则禁用、Smart 缓存、GeoData/LightGBM 维护和 WebUI 状态存储接口。外部面板可重启、重载配置及通过 Homebrew 升级内核，受保护副本继续走原生授权安装。
 - 支持用户可读的目录外资源和引用符号链接，导入受保护副本并在停止后回传更新；保留运行期间用户自行更改的文件。

@@ -7,7 +7,7 @@ import path from 'path'
 import { once } from 'events'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import WebSocket, { WebSocketServer } from 'ws'
-import { createExternalController } from './external-controller'
+import { createExternalController, controllerClientAuth } from './external-controller'
 
 let root: string
 let upstream: http.Server
@@ -56,6 +56,22 @@ const start = async (
 }
 
 describe('macOS public controller transport', () => {
+  it('matches the native core client-auth modes and requires verification when a CA is supplied', () => {
+    expect(controllerClientAuth(undefined, false)).toEqual({
+      requireClientCertificate: false,
+      verifyClientCertificateIfGiven: false,
+      requestCert: false,
+      rejectUnauthorized: false
+    })
+    expect(controllerClientAuth(undefined, true).rejectUnauthorized).toBe(true)
+    expect(controllerClientAuth('request', true)).toMatchObject({
+      requestCert: true,
+      rejectUnauthorized: false
+    })
+    expect(controllerClientAuth('require-any', true).requireClientCertificate).toBe(true)
+    expect(controllerClientAuth('verify-if-given', true).verifyClientCertificateIfGiven).toBe(true)
+    expect(controllerClientAuth('require-and-verify', true).rejectUnauthorized).toBe(true)
+  })
   it('authenticates and forwards escaped group names without exposing helper controls or credentials', async () => {
     const base = await start()
     const name = encodeURIComponent('🚀 节点选择')
@@ -219,6 +235,40 @@ describe('macOS public controller transport', () => {
       const closed = once(client, 'close')
       client.close()
       await closed
+      await controller?.stop()
+      controller = undefined
+      const tls = { key: await readFile(key), cert: await readFile(cert) }
+      const auth = controllerClientAuth(undefined, true)
+      const protectedBase = (
+        await start({
+          ...auth,
+          tls: {
+            ...tls,
+            ca: tls.cert,
+            requestCert: auth.requestCert,
+            rejectUnauthorized: auth.rejectUnauthorized
+          }
+        })
+      ).replace('http:', 'https:')
+      const get = (identity = false): Promise<number> =>
+        new Promise((resolve, reject) => {
+          https
+            .get(
+              `${protectedBase}/version`,
+              {
+                rejectUnauthorized: false,
+                ...(identity ? tls : {}),
+                headers: { Authorization: 'Bearer public-secret' }
+              },
+              (res) => {
+                res.resume()
+                res.on('end', () => resolve(res.statusCode || 0))
+              }
+            )
+            .on('error', reject)
+        })
+      await expect(get()).rejects.toThrow()
+      expect(await get(true)).toBe(200)
     }
   )
 

@@ -28,6 +28,25 @@ export interface ControllerReply {
   afterResponse?: () => Promise<void>
 }
 
+export function controllerClientAuth(
+  type: string | undefined,
+  hasCertificate: boolean
+): {
+  requireClientCertificate: boolean
+  verifyClientCertificateIfGiven: boolean
+  requestCert: boolean
+  rejectUnauthorized: boolean
+} {
+  const known = ['request', 'require-any', 'verify-if-given', 'require-and-verify']
+  const mode = known.includes(type || '') ? type : hasCertificate ? 'require-and-verify' : ''
+  return {
+    requireClientCertificate: mode === 'require-any',
+    verifyClientCertificateIfGiven: mode === 'verify-if-given',
+    requestCert: Boolean(mode),
+    rejectUnauthorized: mode === 'require-and-verify'
+  }
+}
+
 export async function readControllerJSON<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = []
   let size = 0
