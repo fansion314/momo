@@ -16,9 +16,8 @@ var momoManagedRoot, momoManagedSocket string
 func MomoManaged() bool         { return momoManagedRoot != "" }
 func MomoManagedSocket() string { return momoManagedSocket }
 
-// MomoAllowSystemTimeWrite keeps NTP offsets local to the managed process.
-// A profile may choose its time server but cannot change the host wall clock.
-func MomoAllowSystemTimeWrite(requested bool) bool { return requested && !MomoManaged() }
+// The user's explicit NTP setting has the same meaning in service and CLI mode.
+func MomoAllowSystemTimeWrite(requested bool) bool { return requested }
 
 // EnableMomoManaged is deliberately unavailable to ordinary CLI sessions. The
 // dedicated, signed helper owns this tree; clients must copy resources into it.

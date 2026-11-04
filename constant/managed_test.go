@@ -34,7 +34,7 @@ func TestManagedSubpath(t *testing.T) {
 	}
 }
 
-func TestManagedNTPNeverWritesSystemClock(t *testing.T) {
+func TestManagedNTPPreservesExplicitSystemClockSetting(t *testing.T) {
 	oldRoot := momoManagedRoot
 	t.Cleanup(func() { momoManagedRoot = oldRoot })
 	for _, managed := range []bool{false, true} {
@@ -43,7 +43,7 @@ func TestManagedNTPNeverWritesSystemClock(t *testing.T) {
 			momoManagedRoot = MomoManagedRoot + "/test"
 		}
 		for _, requested := range []bool{false, true} {
-			if got := MomoAllowSystemTimeWrite(requested); got != (requested && !managed) {
+			if got := MomoAllowSystemTimeWrite(requested); got != requested {
 				t.Errorf("managed=%v requested=%v: clock write allowed=%v", managed, requested, got)
 			}
 		}

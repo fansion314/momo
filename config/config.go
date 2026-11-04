@@ -646,7 +646,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	if C.MomoManaged() {
-		rawCfg.NTP.WriteToSystem = false
 		// Controllers are always supplied by the helper, including on reload.
 		rawCfg.ExternalController = ""
 		rawCfg.ExternalControllerTLS = ""

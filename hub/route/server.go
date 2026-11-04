@@ -146,9 +146,9 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 		if !embedMode && !C.MomoManaged() { // disallow restart in embed and managed modes
 			r.Mount("/restart", restartRouter())
 		}
-		if !C.MomoManaged() {
-			r.Mount("/upgrade", upgradeRouter())
-		}
+		// Geo/model maintenance is also needed by managed clients. Executable
+		// and UI replacement retain their own guards and run through the app.
+		r.Mount("/upgrade", upgradeRouter())
 		addExternalRouters(r)
 
 	})
