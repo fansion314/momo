@@ -446,6 +446,10 @@ export const mihomoGroupDelay = async (group: string, url?: string): Promise<IMi
 }
 
 export const mihomoUpgradeUI = async (): Promise<void> => {
+  if (isMacServiceActive()) {
+    const { upgradeMacExternalUI } = await import('./macos-controller')
+    return await upgradeMacExternalUI()
+  }
   const instance = await getAxios()
   return await instance.post('/upgrade/ui')
 }
@@ -472,17 +476,18 @@ export const mihomoHotReloadConfig = async (): Promise<void> => {
       if (!status.workDir) throw new Error('Service work directory is unavailable')
       const { getProfileItem } = await import('../config')
       const secret = (await getProfileItem(current))?.ageSecretKey
-      await macServiceRequest(
-        '/v1/core/config',
-        await createMacCoreSnapshot(
-          mihomoWorkDir(),
-          path.resolve(configPath),
-          status.workDir,
-          secret,
-          status.dataMigrated
-        ),
-        60000
+      const snapshot = await createMacCoreSnapshot(
+        mihomoWorkDir(),
+        path.resolve(configPath),
+        status.workDir,
+        secret,
+        status.dataMigrated
       )
+      await macServiceRequest('/v1/core/config', snapshot, 60000)
+      const { rememberMacResources } = await import('./macos-resources')
+      rememberMacResources(snapshot)
+      const { startMacExternalController } = await import('./macos-controller')
+      await startMacExternalController(path.dirname(configPath))
     } else {
       await instance.put('/configs?force=true', { path: configPath })
     }

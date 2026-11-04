@@ -71,6 +71,7 @@ import {
   restoreMacServiceNetwork
 } from './macos-service'
 import { createMacCoreSnapshot } from './macos-snapshot'
+import { startMacExternalController, stopMacExternalController } from './macos-controller'
 
 // 重新导出权限相关函数
 export {
@@ -811,11 +812,14 @@ async function startCoreInternal(detached = false, skipStop = false): Promise<Co
       status.dataMigrated
     )
     await macServiceRequest('/v1/core/start', snapshot, 60000)
+    const { rememberMacResources } = await import('./macos-resources')
+    rememberMacResources(snapshot)
     managedCoreRunning = true
     expectMacServiceCore(true)
     await getAxios(true)
     const readiness = (async (): Promise<Promise<void>[]> => {
       await waitForCoreReady()
+      await startMacExternalController(config.workDir)
       await Promise.all([
         startMihomoTraffic(),
         startMihomoConnections(),
@@ -902,6 +906,7 @@ export function startCoreForStartup(): Promise<Promise<void>[]> {
 }
 
 async function stopCoreInternal(force = false, cancelStartup = true): Promise<void> {
+  await stopMacExternalController()
   if (isMacServiceActive()) {
     await stopMacServiceCore()
     managedCoreRunning = false
@@ -984,6 +989,7 @@ export async function stopCore(force = false): Promise<void> {
 export async function stopCoreForExit(): Promise<void> {
   coreOperationPhase = 'shutting-down'
   cancelAutomaticRestart()
+  await stopMacExternalController()
   if (isMacServiceActive()) {
     await stopMacServiceCore(true)
     managedCoreRunning = false

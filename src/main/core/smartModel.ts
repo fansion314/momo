@@ -4,6 +4,7 @@ import path from 'path'
 import { mihomoWorkDir, mihomoTestDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import { downloadGitHubAsset } from '../utils/github'
+import { isMacServiceActive, macServiceRequest } from './macos-service'
 
 const MODEL_FILE = 'Model.bin'
 
@@ -68,7 +69,9 @@ export async function syncSmartModelToTestDir(): Promise<void> {
   }
 }
 
-export async function getSmartModelStatus(): Promise<ISmartModelStatus> {
+export async function getSmartModelStatus(local = false): Promise<ISmartModelStatus> {
+  if (!local && isMacServiceActive())
+    return await macServiceRequest<ISmartModelStatus>('/v1/core/model')
   const target = path.join(mihomoWorkDir(), MODEL_FILE)
   try {
     const stats = await stat(target)
@@ -104,5 +107,5 @@ export async function downloadSmartModel(variant: SmartModelVariant): Promise<IS
   }
 
   await syncSmartModelToTestDir()
-  return getSmartModelStatus()
+  return getSmartModelStatus(true)
 }

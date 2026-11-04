@@ -525,6 +525,13 @@ interface IMihomoConfig {
   'external-controller-pipe': string
   'external-controller-unix': string
   'external-controller': string
+  'external-controller-tls'?: string
+  tls?: {
+    certificate?: string
+    'private-key'?: string
+    'client-auth-cert'?: string
+    'client-auth-type'?: string
+  }
   'external-ui': string
   'external-ui-url': string
   'external-controller-cors'?: {

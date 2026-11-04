@@ -413,10 +413,9 @@ async function migrateMihomoConfig(): Promise<void> {
     }
   }
 
-  // 标准模式清理旧的控制器字段；简易模式的 general 模块保留这些字段原样生成。
+  // User-configured public controllers are independent of the private app socket.
   if (appConfig.operationMode !== 'simple') {
     // 移除废弃配置
-    if (config['external-controller-unix']) patches['external-controller-unix'] = undefined
     if (config['external-controller-pipe']) patches['external-controller-pipe'] = undefined
     if (config['external-controller'] === undefined) patches['external-controller'] = ''
   }

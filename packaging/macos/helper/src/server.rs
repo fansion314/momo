@@ -237,7 +237,7 @@ impl Service {
             let shared = self.clone();
             return blocking_response(move||{
                 let life=locked(&shared.lifecycle)?;let installation=&life.installation;
-                Ok(json(serde_json::json!({"protocol":1,"helperVersion":"2","coreVersion":installation.core_version,"helperHash":installation.helper_hash,"coreHash":installation.core_hash,"running":shared.running.load(Ordering::Acquire),"pid":life.core.as_ref().map_or(0,|c|c.pid),"workDir":life.root.join("data"),"uid":installation.uid,"dataMigrated":life.root.join("migrated").is_file()})))
+                Ok(json(serde_json::json!({"protocol":1,"helperVersion":"3","coreVersion":installation.core_version,"helperHash":installation.helper_hash,"coreHash":installation.core_hash,"running":shared.running.load(Ordering::Acquire),"pid":life.core.as_ref().map_or(0,|c|c.pid),"workDir":life.root.join("data"),"uid":installation.uid,"dataMigrated":life.root.join("migrated").is_file()})))
             }).await;
         }
         if method == "POST" && path == "/v1/session" {
@@ -321,7 +321,25 @@ impl Service {
                 .await;
         }
         if method == "GET" && path == "/v1/core/state" {
-            return self.export(generation, cancelled).await;
+            return self.export(generation, cancelled, None).await;
+        }
+        if method == "POST" && path == "/v1/core/resources" {
+            let bytes = match small_body(request.into_body(), 65536, &cancelled).await {
+                Ok(bytes) => bytes,
+                Err(_) => return failure(StatusCode::BAD_REQUEST, "invalid resource list"),
+            };
+            let names: Vec<String> = match serde_json::from_slice(&bytes) {
+                Ok(names) => names,
+                Err(_) => return failure(StatusCode::BAD_REQUEST, "invalid resource list"),
+            };
+            if names.len() > 4096
+                || names
+                    .iter()
+                    .any(|name| !files::safe_relative(name) || name.ends_with(".sock"))
+            {
+                return failure(StatusCode::BAD_REQUEST, "invalid resource path");
+            }
+            return self.export(generation, cancelled, Some(names)).await;
         }
         let bytes = if method == "POST" {
             match small_body(request.into_body(), 65536, &cancelled).await {
@@ -347,6 +365,22 @@ impl Service {
                     return Ok(json(
                         serde_json::json!({"logs":locked(&life.logs)?.read()?}),
                     ));
+                }
+                ("GET", "/v1/core/model") => {
+                    let path = life.root.join("data/Model.bin");
+                    if !path.try_exists()? { return Ok(json(serde_json::json!({"state":"missing","size":0}))); }
+                    let mut file = files::checked_open(&path)?;
+                    let info = file.metadata()?;
+                    use std::io::{Seek, SeekFrom};
+                    let mut head = [0u8; 64];
+                    let mut tail = [0u8; 64];
+                    let complete = if info.len() > 128 {
+                        file.read_exact(&mut head)?;
+                        file.seek(SeekFrom::End(-64))?;
+                        file.read_exact(&mut tail)?;
+                        head.starts_with(b"tree") && String::from_utf8_lossy(&tail).trim_end().ends_with("[/target_enhance]")
+                    } else { false };
+                    return Ok(json(serde_json::json!({"state":if complete {"ready"} else {"damaged"},"size":info.len(),"modified":info.modified()?.duration_since(std::time::UNIX_EPOCH)?.as_millis()})));
                 }
                 ("POST", "/v1/network/proxy") => {
                     life.network.proxy(serde_json::from_slice(&bytes)?)?
@@ -427,7 +461,12 @@ impl Service {
         }
         json(serde_json::json!({"ok":true}))
     }
-    async fn export(self: Arc<Self>, generation: u64, cancelled: Arc<AtomicBool>) -> HttpResponse {
+    async fn export(
+        self: Arc<Self>,
+        generation: u64,
+        cancelled: Arc<AtomicBool>,
+        names: Option<Vec<String>>,
+    ) -> HttpResponse {
         let (sender, receiver) = mpsc::channel(4);
         let (ready, prepared) = oneshot::channel();
         let shared = self.clone();
@@ -446,22 +485,28 @@ impl Service {
                 files::protected_tree(&life.root.join("data"))?;
                 let mut files = Vec::new();
                 let mut total = 0;
-                for name in [
-                    "traffic-history.db",
-                    "traffic-history.db-wal",
-                    "traffic-history.db-shm",
-                    "cache.db",
-                    "cache.db-wal",
-                    "cache.db-shm",
-                ] {
-                    let path = life.root.join("data").join(name);
+                let names = names.unwrap_or_else(|| {
+                    [
+                        "traffic-history.db",
+                        "traffic-history.db-wal",
+                        "traffic-history.db-shm",
+                        "cache.db",
+                        "cache.db-wal",
+                        "cache.db-shm",
+                    ]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect()
+                });
+                for name in names {
+                    let path = life.root.join("data").join(&name);
                     if !path.try_exists()? {
                         continue;
                     }
                     let file = files::checked_open(&path)?;
                     total += file.metadata()?.len();
                     ensure!(total <= 512 << 20, "state export exceeds 512MiB");
-                    files.push((name.to_owned(), file));
+                    files.push((name, file));
                 }
                 Ok((life, files))
             };
@@ -662,7 +707,9 @@ impl Body for ChannelBody {
 }
 
 pub fn allowed_core_route(method: &str, path: &str) -> bool {
-    if path.contains(['%', '\\', '\0']) || path.contains("..") {
+    // The HTTP URI is still escaped here. Validate each component without
+    // rejecting normal encodeURIComponent output (Chinese, emoji, spaces).
+    if path.split('/').any(|segment| !valid_route_segment(segment)) {
         return false;
     }
     match method {
@@ -682,26 +729,66 @@ pub fn allowed_core_route(method: &str, path: &str) -> bool {
             "/group",
             "/traffic-history",
             "/smart",
+            "/storage",
         ]
         .iter()
         .any(|base| path == *base || (*base != "/" && path.starts_with(&format!("{base}/")))),
-        "PATCH" => path == "/configs",
-        "DELETE" => path == "/connections" || path.starts_with("/connections/"),
-        "PUT" => ["/proxies/", "/providers/proxies/", "/providers/rules/"]
-            .iter()
-            .any(|base| path.starts_with(base)),
+        "PATCH" => path == "/configs" || path == "/rules/disable",
+        "DELETE" => {
+            ["/connections/", "/proxies/", "/storage/"]
+                .iter()
+                .any(|base| path.starts_with(base))
+                || path == "/connections"
+        }
+        "PUT" => [
+            "/proxies/",
+            "/providers/proxies/",
+            "/providers/rules/",
+            "/storage/",
+        ]
+        .iter()
+        .any(|base| path.starts_with(base)),
         "POST" => {
             [
                 "/configs/geo",
                 "/cache/fakeip/flush",
                 "/cache/dns/flush",
+                "/cache/smart/flush",
                 "/connections",
+                "/upgrade/geo",
+                "/upgrade/lgbm",
             ]
             .contains(&path)
                 || path.starts_with("/smart/")
+                || path.starts_with("/cache/smart/flush/")
         }
         _ => false,
     }
+}
+
+fn valid_route_segment(segment: &str) -> bool {
+    let mut bytes = segment.bytes();
+    let mut decoded = Vec::with_capacity(segment.len());
+    while let Some(byte) = bytes.next() {
+        if byte == b'%' {
+            let Some(high) = bytes.next().and_then(|b| (b as char).to_digit(16)) else {
+                return false;
+            };
+            let Some(low) = bytes.next().and_then(|b| (b as char).to_digit(16)) else {
+                return false;
+            };
+            decoded.push((high * 16 + low) as u8);
+        } else {
+            decoded.push(byte);
+        }
+    }
+    let Ok(decoded) = std::str::from_utf8(&decoded) else {
+        return false;
+    };
+    // Dynamic names are opaque to the router, not filesystem paths. Escaped
+    // slashes/backslashes/percent signs are valid proxy and provider names.
+    // Literal dot path components remain forbidden; no URL normalization occurs.
+    !matches!(decoded, "." | "..") && !decoded.chars().any(char::is_control)
 }
 
 async fn proxy(
@@ -905,8 +992,11 @@ mod tests {
             ("POST", "/upgrade"),
             ("PUT", "/configs"),
             ("GET", "/proxies/../../etc/passwd"),
-            ("GET", "/providers/proxies/%2fetc"),
             ("GET", "/unknown"),
+            ("PUT", "/proxies/%2e%2e"),
+            ("PUT", "/proxies/%00"),
+            ("PUT", "/proxies/%GG"),
+            ("PUT", "/proxies/%FF"),
         ] {
             assert!(!allowed_core_route(method, path));
         }
@@ -916,7 +1006,24 @@ mod tests {
             ("GET", "/traffic-history/status"),
             ("PATCH", "/configs"),
             ("PUT", "/proxies/group"),
+            ("PUT", "/proxies/auto%2Ffallback%5C%252F"),
+            ("GET", "/providers/proxies/%2fetc"),
+            ("POST", "/upgrade/geo"),
+            ("POST", "/upgrade/lgbm"),
             ("DELETE", "/connections/id"),
+            (
+                "PUT",
+                "/proxies/%F0%9F%9A%80%20%E8%8A%82%E7%82%B9%E9%80%89%E6%8B%A9",
+            ),
+            ("GET", "/providers/proxies/%E8%AE%A2%E9%98%85%201"),
+            ("GET", "/group/%E8%87%AA%E5%8A%A8/weights"),
+            ("DELETE", "/proxies/%E8%87%AA%E5%8A%A8"),
+            ("PATCH", "/rules/disable"),
+            ("POST", "/cache/smart/flush"),
+            ("POST", "/cache/smart/flush/%E8%87%AA%E5%8A%A8"),
+            ("GET", "/storage/settings"),
+            ("PUT", "/storage/settings"),
+            ("DELETE", "/storage/settings"),
         ] {
             assert!(allowed_core_route(method, path));
         }

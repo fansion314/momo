@@ -448,3 +448,8 @@ export async function getRuntimeConfigStr(): Promise<string> {
 export async function getRuntimeConfig(): Promise<IMihomoConfig> {
   return runtimeConfig
 }
+
+export function setAppliedRuntimeConfig(profile: IMihomoConfig): void {
+  runtimeConfig = profile
+  runtimeConfigStr = stringify(profile)
+}

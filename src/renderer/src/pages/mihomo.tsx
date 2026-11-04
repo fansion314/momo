@@ -161,6 +161,7 @@ const Mihomo: React.FC = () => {
       }
     } catch (e) {
       console.error('Apply config change failed:', e)
+      toast.error(String(e))
     }
   }
 

@@ -1,8 +1,51 @@
 use super::*;
+use base64::Engine;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     task::JoinHandle,
 };
+
+#[tokio::test(flavor = "current_thread")]
+async fn model_status_and_requested_resource_exports_use_protected_files() {
+    let Some(harness) = Harness::new().await else {
+        return;
+    };
+    let token = harness.session().await;
+    let mut model = b"tree".to_vec();
+    model.extend_from_slice(&[b' '; 160]);
+    model.extend_from_slice(b"[/target_enhance]\n");
+    files::atomic_write(&harness.root.path().join("data/Model.bin"), &model, 0o600).unwrap();
+    let (status, bytes) = harness
+        .request("GET", "/v1/core/model", Some(&token), None, b"")
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(value["state"], "ready");
+    assert_eq!(value["size"], model.len());
+    let (status, bytes) = harness
+        .request(
+            "POST",
+            "/v1/core/resources",
+            Some(&token),
+            None,
+            br#"["Model.bin"]"#,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(value["files"][0]["path"], "Model.bin");
+    assert_eq!(value["files"][0]["data"], STANDARD.encode(model));
+    let (status, _) = harness
+        .request(
+            "POST",
+            "/v1/core/resources",
+            Some(&token),
+            None,
+            br#"["../installation.json"]"#,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
 
 struct Harness {
     root: tempfile::TempDir,

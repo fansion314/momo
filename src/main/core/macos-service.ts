@@ -241,6 +241,8 @@ export async function stopMacServiceCore(release = false): Promise<void> {
   expectedRunning = false
   try {
     await macServiceRequest('/v1/core/stop', {}, 8000)
+    const { syncMacResources } = await import('./macos-resources')
+    await syncMacResources()
   } finally {
     if (release) clearMacServiceSession()
   }

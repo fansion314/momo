@@ -5,6 +5,7 @@ import os
 import socket
 import subprocess
 import time
+from urllib.parse import quote
 
 SOCKET = '/Library/PrivilegedHelperTools/world.fansionia.clash-momo.ipc/helper.sock'
 
@@ -57,6 +58,21 @@ traffic-history:
   path: traffic-history.db
   geoip:
     enable: false
+proxies:
+  - name: 节点 A
+    type: direct
+  - name: 节点/B
+    type: direct
+proxy-groups:
+  - name: 🚀 节点/选择
+    type: select
+    proxies: [节点 A, 节点/B]
+  - name: 自动/回退
+    type: fallback
+    proxies: [节点 A, 节点/B]
+    url: http://127.0.0.1:9
+    interval: 3600
+    lazy: true
 '''
 request('POST', '/v1/core/start', {'config': config, 'files': []}, token)
 request('POST', '/v1/lease', {}, token)
@@ -65,6 +81,20 @@ assert status['running'] and status['pid'] > 1
 version = request('GET', '/core/version', token=token)
 assert version['version'] == '1.19.33'
 assert request('GET', '/core/traffic-history/status', token=token)['enabled']
+if status.get('helperVersion') == '3':
+    group = quote('🚀 节点/选择', safe='')
+    request('PUT', '/core/proxies/' + group, {'name': '节点/B'}, token, expected=204)
+    assert request('GET', '/core/proxies/' + group, token=token)['now'] == '节点/B'
+    fallback = quote('自动/回退', safe='')
+    request('PUT', '/core/proxies/' + fallback, {'name': '节点/B'}, token, expected=204)
+    request('DELETE', '/core/proxies/' + fallback, token=token, expected=204)
+    request('PUT', '/core/storage/panel', {'view': 'proxies'}, token, expected=204)
+    assert request('GET', '/core/storage/panel', token=token) == {'view': 'proxies'}
+    request('DELETE', '/core/storage/panel', token=token, expected=204)
+    request('PATCH', '/core/rules/disable', {}, token, expected=204)
+    assert request('GET', '/v1/core/model', token=token)['state'] in ('ready', 'missing', 'damaged')
+    request('POST', '/v1/core/resources', ['../escape'], token, expected=400)
+    request('POST', '/v1/core/resources', ['cache.db'], token, expected=409)
 request('POST', '/core/upgrade', {}, token, expected=403)
 request('POST', '/core/restart', {}, token, expected=403)
 request('PUT', '/core/configs', {'path': '/etc/passwd'}, token, expected=403)

@@ -1,4 +1,13 @@
-Clash Momo 2.0.4-5（macOS r5），配套内核仍为 Mihomomo 1.19.33-4。
+Clash Momo 2.0.4-6（macOS r6），配套内核为 Mihomomo 1.19.33-5。
+
+- 修复 macOS 中文、空格、Emoji 和带斜杠分组的节点切换、测速、Provider 更新及 Smart 权重访问。
+- 恢复 macOS TCP/TLS/Unix 外部控制器，支持密钥、CORS、HTTP/WebSocket、WebUI 静态面板和下载更新。
+- 补齐取消固定、规则禁用、Smart 缓存、GeoData/LightGBM 维护和 WebUI 状态存储接口。外部面板可重启、重载配置及通过 Homebrew 升级内核，受保护副本继续走原生授权安装。
+- 支持用户可读的目录外资源和引用符号链接，导入受保护副本并在停止后回传更新；保留运行期间用户自行更改的文件。
+- Smart 模型状态查询实际运行副本；NTP 显式写系统时间配置不再被服务模式覆盖。操作失败会显示错误。
+- 增加实际 macOS 安装包界面的节点点击和独立 WebUI 跨域、WebSocket、重载、重启及退出清理验收。
+
+macOS 请先升级配套内核，再升级应用，并在“内核设置 → 更新网络服务”完成授权。Tizi 继续保持撤回。以下为沿用的分发和升级说明：
 
 - 恢复窗口缩放问号提示，设置及内核设置按 Arch、macOS、Windows 显示正确的更新方式。
 - 用量概览新增代理下载量、代理上传量、总代理流量。代理流量按最终出口非 DIRECT 计算，与所选时间范围和筛选条件一致。
@@ -7,7 +16,7 @@ Clash Momo 2.0.4-5（macOS r5），配套内核仍为 Mihomomo 1.19.33-4。
 - Windows 便携版支持检查更新及下载 ZIP，退出后手动替换程序文件，保留 PORTABLE 和 data。安装版和便携版均内置精确配套的 mihomomo.exe，无需另装内核。
 - 更新清单使用 Ed25519 签名，下载文件验证大小与 SHA-256。Windows 程序仍未进行 Authenticode 签名，同时提供 SHA-256 校验文件。
 - 2.0.4-4 尚无应用内更新功能，首次需要手动安装本版本；安装版升级、重装及默认卸载保留用户数据。
-- macOS 请更新 Clash Momo 应用，然后在“内核设置 → 更新网络服务”授权安装 Rust helper，并同步受保护的内核副本。内核继续使用 1.19.33-4。
+- macOS 请更新 Clash Momo 应用，然后在“内核设置 → 更新网络服务”授权安装 Rust helper，并同步受保护的内核副本。
 - Arch 和 macOS 继续既有 fansionia packages 分发；packages 新增的 Windows 同步仅镜像 Clash Momo 的安装包、便携包及更新元数据，不提供额外 Windows 包管理渠道。
 
 Tizi 功能保持撤回，已有 Tizi 账户和加密账本继续保留。请将客户端与配套内核一起更新，避免使用旧 2.0.4-3 客户端搭配新内核。

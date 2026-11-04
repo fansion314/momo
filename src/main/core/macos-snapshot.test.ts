@@ -44,11 +44,46 @@ describe('protected service snapshots', () => {
     const reload = await createMacCoreSnapshot(root, configPath, '/protected', undefined, true)
     expect(reload.files.map((file) => file.path)).toEqual(['providers/a.yaml'])
   })
-  it('rejects symbolic links before reading privileged snapshot resources', async () => {
+  it('ignores unreferenced links and materializes referenced user resources', async () => {
     await writeFile(path.join(root, 'config.yaml'), '{}')
     await symlink('/etc/passwd', path.join(root, 'stolen'))
-    await expect(
-      createMacCoreSnapshot(root, path.join(root, 'config.yaml'), '/protected')
-    ).rejects.toThrow('symbolic links')
+    const clean = await createMacCoreSnapshot(root, path.join(root, 'config.yaml'), '/protected')
+    expect(clean.files).toEqual([])
+    await writeFile(path.join(root, 'target.pem'), 'user certificate')
+    await symlink(path.join(root, 'target.pem'), path.join(root, 'certificate.pem'))
+    await writeFile(path.join(root, 'config.yaml'), 'tls:\n  certificate: certificate.pem\n')
+    const snapshot = await createMacCoreSnapshot(root, path.join(root, 'config.yaml'), '/protected')
+    expect(parse(snapshot.config)).toEqual({ tls: { certificate: '/protected/certificate.pem' } })
+    expect(
+      Buffer.from(
+        snapshot.files.find((file) => file.path === 'certificate.pem')?.data || '',
+        'base64'
+      ).toString()
+    ).toBe('user certificate')
+  })
+
+  it('imports external provider/certificate files and creates a new external database in protected storage', async () => {
+    const external = await mkdtemp(path.join(tmpdir(), 'momo-resource-'))
+    try {
+      await writeFile(path.join(external, 'provider.yaml'), 'proxies: []')
+      await writeFile(
+        path.join(root, 'config.yaml'),
+        `proxy-providers:\n  external:\n    type: file\n    path: ${external}/provider.yaml\ntraffic-history:\n  path: ${external}/history.db\n`
+      )
+      const snapshot = await createMacCoreSnapshot(
+        root,
+        path.join(root, 'config.yaml'),
+        '/protected'
+      )
+      const config = parse<Record<string, Record<string, unknown>>>(snapshot.config)
+      expect(config['traffic-history'].path).toMatch(/^\/protected\/imports\/.+\/history.db$/)
+      expect(snapshot.files.find((file) => file.path.endsWith('/history.db'))).toMatchObject({
+        data: '',
+        importOnly: true
+      })
+      expect(snapshot.files.some((file) => file.path.endsWith('/provider.yaml'))).toBe(true)
+    } finally {
+      await rm(external, { recursive: true, force: true })
+    }
   })
 })

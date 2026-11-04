@@ -376,11 +376,16 @@ const Proxies: React.FC = () => {
 
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
-      await mihomoChangeProxy(group, proxy)
-      if (autoCloseConnection) {
-        await mihomoCloseAllConnections(autoCloseConnectionOnlyGroup ? group : undefined)
+      try {
+        await mihomoChangeProxy(group, proxy)
+        // Reflect the selection even if closing old connections fails afterward.
+        await mutate()
+        if (autoCloseConnection) {
+          await mihomoCloseAllConnections(autoCloseConnectionOnlyGroup ? group : undefined)
+        }
+      } catch (error) {
+        toast.error(String(error))
       }
-      mutate()
     },
     [autoCloseConnection, autoCloseConnectionOnlyGroup, mutate]
   )

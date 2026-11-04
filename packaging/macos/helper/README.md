@@ -98,6 +98,14 @@ external UI installation and direct full config reload. The application must use
 the snapshot endpoint for full reload. Proxy targets are fixed to the managed Unix
 socket, and unknown API routes are denied.
 
+The ordinary Electron process provides the user-configured TCP external controller
+and `/ui` assets. It authenticates the public access token, applies configured CORS,
+and forwards HTTP/WebSocket core API requests through the UID/session-protected
+helper socket. Public requests cannot access `/v1` helper operations. Panel ZIP
+downloads and replacement also run as the ordinary user. Starting, reloading,
+stopping or exiting the app updates or closes this listener; bind failures are
+reported to the settings caller. The root core itself still has no public listener.
+
 Proxy hosts must be loopback and PAC URLs must be HTTP loopback IP URLs. DNS accepts
 literal IPs only. The helper uses scoped SystemConfiguration transactions without
 spawning `networksetup`. It journals original values **before** each mutation and
@@ -122,7 +130,7 @@ HTTP/WebSocket forwarding also stream with backpressure. Persistent logs reuse o
 bounded file descriptor. Every protected lookup and replacement is anchored to
 validated directory descriptors using `openat`, `O_NOFOLLOW`, and `renameat`.
 
-The implementation version is 2 while the public wire protocol remains 1. Existing
+The implementation version is 3 while the public wire protocol remains 1. Existing
 Go installation metadata, process identities, network journals, import digests and
 managed databases remain compatible. CI builds the fixed previously released Go
 helper only as an upgrade and performance fixture; it is not shipped in the app.
@@ -140,3 +148,17 @@ Real TUN packet flow, sleep/wake, interface switching, administrator cancellatio
 physical DNS/proxy behavior and crash recovery on macOS require device acceptance
 in addition to the automated tests. No developer-machine installation is performed
 by the test suite.
+
+## Application resource compatibility
+
+Protocol 1 additionally supports authenticated `GET /v1/core/model` for the actual
+protected model status and `POST /v1/core/resources` with a bounded array of safe
+relative resource paths for export after stopping the core. The existing state
+export remains compatible. The ordinary app materializes referenced user-readable
+external files and symlinks as bytes before import, and maps exports back only to
+its recorded sources. Root continues to reject symlinks and escaping paths.
+
+Public TLS/Unix listeners and maintenance/lifecycle requests are handled by the
+ordinary app, including snapshot-based full reload and Homebrew-based upgrades.
+The helper only forwards core maintenance operations that do not replace its
+executable or bypass the authorized snapshot lifecycle.

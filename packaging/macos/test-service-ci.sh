@@ -4,11 +4,16 @@ set -euo pipefail
 test "${GITHUB_ACTIONS:-}" = true
 test "$(uname -sm)" = 'Darwin arm64'
 tag=$(node -p 'require("./packaging/macos/release.json").coreTag')
-revision=4
+revision=5
 version=${tag#mihomomo-v}
 archive="mihomomo-${version}-macos-arm64-r${revision}.tar.gz"
 stage=$(mktemp -d)
-trap 'sudo "/Library/PrivilegedHelperTools/world.fansionia.clash-momo.helper" uninstall || true; rm -rf "$stage"' EXIT
+cleanup() {
+  sudo "/Library/PrivilegedHelperTools/world.fansionia.clash-momo.helper" uninstall || true
+  if [[ "$(readlink /opt/homebrew/opt/mihomomo 2>/dev/null || true)" == "$stage" ]]; then rm /opt/homebrew/opt/mihomomo; fi
+  rm -rf "$stage"
+}
+trap cleanup EXIT
 for attempt in {1..120}; do
   if gh release view "$tag" -R fansion314/momo --json isDraft,assets | node -e '
     const fs = require("node:fs")
@@ -75,3 +80,8 @@ import sqlite3
 with sqlite3.connect('/Library/Application Support/world.fansionia.clash-momo/data/traffic-history.db') as connection:
     assert connection.execute('SELECT value FROM momo_upgrade_fixture WHERE id=1').fetchone() == ('preserve Go helper history across Rust upgrade',)
 PY
+# Exercise the packaged renderer and public controller against this exact core.
+test ! -e /opt/homebrew/opt/mihomomo
+ln -s "$stage" /opt/homebrew/opt/mihomomo
+node packaging/macos/smoke.mjs
+rm /opt/homebrew/opt/mihomomo
