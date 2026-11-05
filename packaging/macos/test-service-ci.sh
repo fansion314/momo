@@ -3,6 +3,7 @@
 set -euo pipefail
 test "${GITHUB_ACTIONS:-}" = true
 test "$(uname -sm)" = 'Darwin arm64'
+validation_root=$(cd "$(dirname "$0")" && pwd)
 tag=$(node -p 'require("./packaging/macos/release.json").coreTag')
 revision=5
 version=${tag#mihomomo-v}
@@ -35,9 +36,9 @@ mkdir -p dist/validation
 git archive f769c662e7d86f7bc5de10574f0577ab3e719b4f packaging/macos/helper | tar -x -C "$stage"
 (cd "$stage/packaging/macos/helper" && go build -trimpath -o "$stage/go-helper" .)
 sudo "$stage/go-helper" install --uid "$(id -u)" --core "$stage/bin/mihomomo"
-python3 packaging/macos/benchmark-helper.py go "$stage/benchmark-go.json"
+python3 "$validation_root/benchmark-helper.py" go "$stage/benchmark-go.json"
 cp "$stage/benchmark-go.json" dist/validation/
-python3 packaging/macos/test-service-ci.py
+python3 "$validation_root/test-service-ci.py"
 sudo /usr/bin/python3 - <<'PY'
 import sqlite3
 from pathlib import Path
@@ -69,12 +70,12 @@ import sqlite3
 with sqlite3.connect('/Library/Application Support/world.fansionia.clash-momo/data/traffic-history.db') as connection:
     assert connection.execute('SELECT value FROM momo_upgrade_fixture WHERE id=1').fetchone() == ('preserve Go helper history across Rust upgrade',)
 PY
-python3 packaging/macos/benchmark-helper.py rust "$stage/benchmark-rust.json"
+python3 "$validation_root/benchmark-helper.py" rust "$stage/benchmark-rust.json"
 cp "$stage/benchmark-rust.json" dist/validation/
-python3 packaging/macos/test-service-ci.py
+python3 "$validation_root/test-service-ci.py"
 # Reinstall tests the same authorized transaction and protected state retention.
 sudo "$helper" install --uid "$(id -u)" --core "$stage/bin/mihomomo"
-python3 packaging/macos/test-service-ci.py
+python3 "$validation_root/test-service-ci.py"
 sudo /usr/bin/python3 - <<'PY'
 import sqlite3
 with sqlite3.connect('/Library/Application Support/world.fansionia.clash-momo/data/traffic-history.db') as connection:
@@ -83,5 +84,5 @@ PY
 # Exercise the packaged renderer and public controller against this exact core.
 test ! -e /opt/homebrew/opt/mihomomo
 ln -s "$stage" /opt/homebrew/opt/mihomomo
-node packaging/macos/smoke.mjs
+node "$validation_root/smoke.mjs"
 rm /opt/homebrew/opt/mihomomo

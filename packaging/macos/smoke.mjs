@@ -18,6 +18,7 @@ const group = '🚀 节点/选择'
 const secret = 'disposable-ci-controller-token'
 let application
 let panelServer
+let rendererPage
 async function availablePort() {
   const server = net.createServer()
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -103,6 +104,7 @@ rules: ["MATCH,DIRECT"]
   const executable = path.resolve('dist/macos/Clash Momo.app/Contents/MacOS/Clash Momo')
   application = await _electron.launch({ executablePath: executable, timeout: 45000 })
   const page = await application.firstWindow()
+  rendererPage = page
   const service = await waitFor(
     () => invoke(page, 'macServiceStatus'),
     (value) => value.running && value.compatible,
@@ -114,6 +116,10 @@ rules: ["MATCH,DIRECT"]
     (value) => value.proxies?.[group],
     'Proxy group readiness'
   )
+  // A new application profile shows the normal first-run tour. Dismiss it by
+  // its visible close button before testing node-card pointer interactions.
+  await page.locator('.driver-popover-close-btn').click({ timeout: 15000 })
+  await page.locator('.driver-overlay').waitFor({ state: 'hidden', timeout: 15000 })
   // Click the actual renderer card. This catches pointer/event regressions as
   // well as IPC transport failures with non-ASCII and escaped group names.
   await page.getByText(group, { exact: true }).first().click({ timeout: 30000 })
@@ -223,6 +229,7 @@ rules: ["MATCH,DIRECT"]
     JSON.stringify(
       {
         rendererSelection: true,
+        onboardingDismissed: true,
         externalPanelSelection: true,
         cors: true,
         websocket: true,
@@ -238,6 +245,16 @@ rules: ["MATCH,DIRECT"]
   console.log(
     'Packaged macOS renderer, privileged core, external WebUI, reload and cleanup checks passed'
   )
+} catch (error) {
+  await mkdir('dist/validation', { recursive: true })
+  await rendererPage
+    ?.screenshot({ path: 'dist/validation/macos-controller-failure.png' })
+    .catch(() => {})
+  await writeFile(
+    'dist/validation/macos-controller-failure.json',
+    JSON.stringify({ error: String(error) }, null, 2) + '\n'
+  )
+  throw error
 } finally {
   await application?.close().catch(() => {})
   await new Promise((resolve) => (panelServer ? panelServer.close(resolve) : resolve()))
