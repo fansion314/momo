@@ -10,7 +10,7 @@ node node_modules/electron/install.js
 node scripts/prepare.mjs
 pnpm --package=vite-plus@1.4.0 dlx vp run build:windows
 if ($LASTEXITCODE) { throw 'Windows packaging failed' }
-node packaging/windows/smoke.mjs
+node (Join-Path $PSScriptRoot 'smoke.mjs')
 if ($LASTEXITCODE) { throw 'Windows runtime verification failed' }
 $installer = Get-Item dist/release/*-windows-x64-setup.exe
 $installDir = Join-Path $env:RUNNER_TEMP 'Clash Momo 安装 验收'
@@ -19,7 +19,7 @@ if (Test-Path $installDir) { throw 'Reserved test installation already exists' }
 try {
   $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S /D=$installDir" -Wait -PassThru
   if ($process.ExitCode) { throw 'NSIS installation failed' }
-  node packaging/windows/smoke.mjs --installed $installDir
+  node (Join-Path $PSScriptRoot 'smoke.mjs') --installed $installDir
   if ($LASTEXITCODE) { throw 'Installed application verification failed' }
   # Reinstall into the same directory: user data and bundled core must survive.
   $marker = Join-Path $dataDir 'ci-retain-data.txt'
@@ -39,8 +39,8 @@ try {
   Remove-Item -LiteralPath $installDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 Write-Host 'Native Windows install, reinstall, uninstall, portable and bundled-core verification passed.'
-node packaging/windows/update-e2e.mjs
+node (Join-Path $PSScriptRoot 'update-e2e.mjs')
 if ($LASTEXITCODE) { throw 'Windows application update acceptance failed' }
-node packaging/windows/production-upgrade-e2e.mjs
+node (Join-Path $PSScriptRoot 'production-upgrade-e2e.mjs')
 if ($LASTEXITCODE) { throw 'Windows production release upgrade acceptance failed' }
 Write-Host 'Interactive UAC acceptance/cancellation requires a desktop test; an elevated CI runner does not cover that interaction.'

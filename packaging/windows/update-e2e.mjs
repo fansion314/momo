@@ -33,7 +33,11 @@ const pkg = JSON.parse(await readFile('package.json', 'utf8'))
 const revision = Number(
   (await readFile('packaging/arch/PKGBUILD', 'utf8')).match(/^pkgrel=(\d+)$/m)[1]
 )
-assert.equal(revision, 5, 'This acceptance fixture exercises package revision 4 -> 5')
+assert(
+  Number.isSafeInteger(revision) && revision >= 2,
+  'Update acceptance requires a prior package revision'
+)
+const fixtureRevision = revision - 1
 const stem = `clash-momo-${pkg.version}-${revision}-windows-x64`
 const installerPath = path.join(root, 'dist/release', `${stem}-setup.exe`)
 const portablePath = path.join(root, 'dist/release', `${stem}-portable.zip`)
@@ -99,7 +103,7 @@ const windowsPowerShell = path.win32.join(
   'powershell.exe'
 )
 const evidence = {
-  from: `${pkg.version}-4`,
+  from: `${pkg.version}-${fixtureRevision}`,
   to: `${pkg.version}-${revision}`,
   productionSource: packageManifest.source_commit,
   tests: [],
@@ -262,7 +266,7 @@ async function attachFixture(executable, sourceName = 'cnb') {
   )
   await waitFor(
     () => invoke(page, 'windowsUpdateState'),
-    (value) => value.currentRevision === 4,
+    (value) => value.currentRevision === fixtureRevision,
     'Fixture revision'
   )
   return page
@@ -323,7 +327,7 @@ async function waitForCallerRestart() {
 }
 
 try {
-  await checkpoint('build isolated revision 4 updater fixture')
+  await checkpoint(`build isolated revision ${fixtureRevision} updater fixture`)
   await mkdir(source, { recursive: true })
   for (const name of [
     'src',
@@ -355,7 +359,10 @@ try {
     JSON.stringify({ [keyId]: publicKey })
   )
   const recipe = path.join(source, 'packaging/arch/PKGBUILD')
-  await writeFile(recipe, (await readFile(recipe, 'utf8')).replace(/^pkgrel=\d+$/m, 'pkgrel=4'))
+  await writeFile(
+    recipe,
+    (await readFile(recipe, 'utf8')).replace(/^pkgrel=\d+$/m, `pkgrel=${fixtureRevision}`)
+  )
   await run(
     process.execPath,
     [path.join(root, 'node_modules/electron-vite/bin/electron-vite.js'), 'build'],
@@ -460,7 +467,7 @@ try {
   const fixtureInstaller = path.join(
     source,
     'dist/windows',
-    `clash-momo-${pkg.version}-4-windows-x64-setup.exe`
+    `clash-momo-${pkg.version}-${fixtureRevision}-windows-x64-setup.exe`
   )
   const encodedInstall = Buffer.from(
     JSON.stringify({ installer: fixtureInstaller, directory: installDir })
@@ -568,7 +575,7 @@ try {
   await invoke(page, 'installWindowsUpdate').catch((error) => {
     if (!/closed|Target/.test(String(error))) throw error
   })
-  await checkpoint('wait for actual revision 5 installer replacement')
+  await checkpoint(`wait for actual revision ${revision} installer replacement`)
   await waitFor(
     async () => hash(await readFile(path.join(installDir, 'resources/app.asar'))),
     (value) => value !== originalAsarHash,
@@ -612,7 +619,7 @@ try {
   application = undefined
   await retireLaunchers()
   evidence.tests.push(
-    'real NSIS 4 -> 5 update preserves original directory, app data, history and restarts paired client'
+    `real NSIS ${fixtureRevision} -> ${revision} update preserves original directory, app data, history and restarts paired client`
   )
 
   await writeFile(path.join(portableDir, 'PORTABLE'), '')
@@ -636,7 +643,7 @@ try {
     hash(portableBytes)
   )
   await assert.rejects(invoke(page, 'installWindowsUpdate'), /installer/)
-  assert.equal((await invoke(page, 'windowsUpdateState')).currentRevision, 4)
+  assert.equal((await invoke(page, 'windowsUpdateState')).currentRevision, fixtureRevision)
   await application.close()
   application = undefined
   await retireLaunchers()
