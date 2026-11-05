@@ -17,7 +17,9 @@ const installDir = path.join(work, '正式旧版 Clash Momo 中文 安装')
 const downloadDir = path.join(work, 'released-4')
 const dataDir = path.join(process.env.APPDATA, 'clash-momo')
 const oldTag = 'clash-momo-v2.0.4-4'
+const oldCoreTag = 'mihomomo-v1.19.33-4'
 const oldName = 'clash-momo-2.0.4-4-windows-x64-setup.exe'
+const smokeScript = path.join(import.meta.dirname, 'smoke.mjs')
 const pkg = JSON.parse(await readFile('package.json', 'utf8'))
 const revision = Number(
   (await readFile('packaging/arch/PKGBUILD', 'utf8')).match(/^pkgrel=(\d+)$/m)[1]
@@ -167,7 +169,13 @@ try {
   await install(path.join(downloadDir, oldName))
   // Exercise the unmodified, publicly released application and its own bundled
   // core, producing genuine old-code traffic-history rows before upgrading.
-  await run(process.execPath, ['packaging/windows/smoke.mjs', '--installed', installDir])
+  await run(process.execPath, [
+    smokeScript,
+    '--installed',
+    installDir,
+    '--expected-core-tag',
+    oldCoreTag
+  ])
   const marker = path.join(dataDir, 'production-upgrade-retain.txt')
   await writeFile(marker, 'keep real-release upgrade data')
   const profile = {
@@ -231,7 +239,7 @@ try {
   await application.close()
   application = undefined
   await retireLaunchers()
-  await run(process.execPath, ['packaging/windows/smoke.mjs', '--installed', installDir])
+  await run(process.execPath, [smokeScript, '--installed', installDir])
   evidence.tests.push(
     'GitHub digest and checksum verify unmodified public -4 installer',
     'actual public -4 client/core startup, proxy requests and traffic persistence',

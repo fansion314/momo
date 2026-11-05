@@ -11,6 +11,12 @@ if (process.platform !== 'win32' || process.arch !== 'x64')
   throw new Error('Native Windows x64 required')
 const root = path.resolve(process.env.RUNNER_TEMP || 'dist', 'clash-momo-windows-smoke')
 const installed = process.argv[2] === '--installed'
+const expectedCoreIndex = process.argv.indexOf('--expected-core-tag')
+const expectedCoreTag = expectedCoreIndex === -1 ? undefined : process.argv[expectedCoreIndex + 1]
+if (expectedCoreTag) {
+  assert(installed, 'Only installed release fixtures may select an older paired core')
+  assert.match(expectedCoreTag, /^mihomomo-v\d+\.\d+\.\d+-\d+$/)
+}
 let appDir
 if (installed) appDir = path.resolve(process.argv[3])
 else {
@@ -123,7 +129,7 @@ async function launch() {
     await readFile(path.join(appDir, 'resources/files/mihomomo-manifest.json'), 'utf8')
   )
   const { coreTag } = JSON.parse(await readFile('packaging/macos/release.json', 'utf8'))
-  assert.equal(manifest.tag, coreTag)
+  assert.equal(manifest.tag, expectedCoreTag || coreTag)
   assert.equal(
     createHash('sha256')
       .update(await readFile(corePath))
