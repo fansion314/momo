@@ -1,6 +1,6 @@
 # macOS 服务模式功能检查（2026-11-04）
 
-检查基线：客户端 `7aefaf12`，内核工作区 `6aa8918d`。本记录描述源码检查和本地回归，不代表已发布或已替换用户当前安装。
+检查基线：客户端 `7aefaf12`，内核工作区 `6aa8918d`。修复已随 Clash Momo 2.0.4-8 正式发布，原生验收和分发结果见 [r8 验收记录](validation-2.0.4-8.md)。
 
 ## 来源与回退范围
 
@@ -48,6 +48,6 @@
 
 - 完整 TypeScript/Vitest 测试、本地格式检查、ESLint、node/web/test 三套类型检查。
 - 普通用户下真实 TCP/Unix HTTP 连接：访问密钥、中文/Emoji 请求保留、CORS 和私有网络预检、WebSocket 双向流、关闭清理、端口冲突、面板静态文件、ZIP 布局与失败保留旧面板。
-- Rust helper `cargo test --locked`（30 项）与 `cargo clippy --locked --all-targets -- -D warnings`，保留默认 sccache。测试命令以普通用户运行；部分 root 专用测试内部提前返回，不能将汇总通过视为本机实际安装/特权验收。
+- Rust helper `cargo test --locked`（31 项）与 `cargo clippy --locked --all-targets -- -D warnings`，保留默认 sccache。测试命令以普通用户运行；部分 root 专用测试内部提前返回，不能将汇总通过视为本机实际安装/特权验收。
 - `electron-vite build` 完成。没有安装或替换开发机的 helper、客户端或 Homebrew 内核，也没有修改真实代理/DNS。
 - 新增 `packaging/macos/smoke.mjs`：在一次性 macOS runner 使用真实打包客户端、已安装 helper 和精确配套内核，点击节点并打开独立 HTTP WebUI，验证跨域、WebSocket、重载、重启及退出清理。最终 CI 和发布结果另记。
