@@ -130,7 +130,7 @@ HTTP/WebSocket forwarding also stream with backpressure. Persistent logs reuse o
 bounded file descriptor. Every protected lookup and replacement is anchored to
 validated directory descriptors using `openat`, `O_NOFOLLOW`, and `renameat`.
 
-The implementation version is 3 while the public wire protocol remains 1. Existing
+The implementation version is 4 while the public wire protocol remains 1. Existing
 Go installation metadata, process identities, network journals, import digests and
 managed databases remain compatible. CI builds the fixed previously released Go
 helper only as an upgrade and performance fixture; it is not shipped in the app.
@@ -162,3 +162,5 @@ Public TLS/Unix listeners and maintenance/lifecycle requests are handled by the
 ordinary app, including snapshot-based full reload and Homebrew-based upgrades.
 The helper only forwards core maintenance operations that do not replace its
 executable or bypass the authorized snapshot lifecycle.
+
+Resource export accepts either the legacy path array or a path-to-SHA256 map; matching content is omitted. Base64 output uses a bounded 64 KiB buffer before channel backpressure. Status uses immutable installation metadata and atomic runtime identity, so lifecycle imports/exports cannot block service discovery.

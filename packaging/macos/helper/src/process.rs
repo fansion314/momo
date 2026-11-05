@@ -157,6 +157,7 @@ impl Lifecycle {
         self.core = None;
         self.key = Zeroizing::new(String::new());
         shared.running.store(false, Ordering::Release);
+        shared.core_pid.store(0, Ordering::Release);
         files::remove_if_exists(&self.root.join("process.json"))?;
         Ok(())
     }
@@ -292,6 +293,7 @@ impl Lifecycle {
                     && life.core.as_ref().is_some_and(|core| core.pid == pid)
                 {
                     shared.running.store(false, Ordering::Release);
+                    shared.core_pid.store(0, Ordering::Release);
                     life.core = None;
                     life.key = Zeroizing::new(String::new());
                     let _ = files::remove_if_exists(&life.root.join("process.json"));
@@ -314,6 +316,7 @@ impl Lifecycle {
             exited,
         });
         self.key = Zeroizing::new(key.to_owned());
+        shared.core_pid.store(pid, Ordering::Release);
         shared.running.store(true, Ordering::Release);
         let deadline = Instant::now() + Duration::from_secs(12);
         while Instant::now() < deadline {

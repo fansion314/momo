@@ -14,6 +14,7 @@ use hyper::{
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
 use std::{
+    collections::BTreeMap,
     convert::Infallible,
     fs::{self, File},
     io::{self, Read, Write},
@@ -22,7 +23,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering},
     },
     task::{Context as TaskContext, Poll},
     time::{Duration, Instant},
@@ -39,6 +40,14 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 type HttpBody = UnsyncBoxBody<Bytes, BoxError>;
 type HttpResponse = Response<HttpBody>;
 type ExportState<'a> = (std::sync::MutexGuard<'a, Lifecycle>, Vec<(String, File)>);
+type ExportResources = Vec<(String, Option<String>)>;
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum ResourceSelection {
+    Paths(Vec<String>),
+    Digests(BTreeMap<String, Option<String>>),
+}
 
 struct Session {
     token: Zeroizing<String>,
@@ -48,9 +57,11 @@ struct Session {
 }
 pub struct Service {
     root: std::path::PathBuf,
+    installation: Installation,
     pub lifecycle: Mutex<Lifecycle>,
     session: Mutex<Session>,
     pub running: AtomicBool,
+    pub core_pid: AtomicI32,
     changed: Notify,
     shutdown: CancellationToken,
     streams: Arc<Semaphore>,
@@ -122,6 +133,7 @@ impl Service {
     pub(crate) fn new(root: &Path, installation: Installation) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             root: root.to_owned(),
+            installation: installation.clone(),
             lifecycle: Mutex::new(Lifecycle::new(root, installation)?),
             session: Mutex::new(Session {
                 token: Zeroizing::new(String::new()),
@@ -130,6 +142,7 @@ impl Service {
                 cancelled: Arc::new(AtomicBool::new(false)),
             }),
             running: AtomicBool::new(false),
+            core_pid: AtomicI32::new(0),
             changed: Notify::new(),
             shutdown: CancellationToken::new(),
             streams: Arc::new(Semaphore::new(16)),
@@ -234,11 +247,11 @@ impl Service {
             );
         }
         if method == "GET" && path == "/v1/status" {
-            let shared = self.clone();
-            return blocking_response(move||{
-                let life=locked(&shared.lifecycle)?;let installation=&life.installation;
-                Ok(json(serde_json::json!({"protocol":1,"helperVersion":"3","coreVersion":installation.core_version,"helperHash":installation.helper_hash,"coreHash":installation.core_hash,"running":shared.running.load(Ordering::Acquire),"pid":life.core.as_ref().map_or(0,|c|c.pid),"workDir":life.root.join("data"),"uid":installation.uid,"dataMigrated":life.root.join("migrated").is_file()})))
-            }).await;
+            let installation = &self.installation;
+            let running = self.running.load(Ordering::Acquire);
+            return json(
+                serde_json::json!({"protocol":1,"helperVersion":"4","coreVersion":installation.core_version,"helperHash":installation.helper_hash,"coreHash":installation.core_hash,"running":running,"pid":if running {self.core_pid.load(Ordering::Acquire)} else {0},"workDir":self.root.join("data"),"uid":installation.uid,"dataMigrated":self.root.join("migrated").is_file()}),
+            );
         }
         if method == "POST" && path == "/v1/session" {
             let shared = self.clone();
@@ -324,18 +337,25 @@ impl Service {
             return self.export(generation, cancelled, None).await;
         }
         if method == "POST" && path == "/v1/core/resources" {
-            let bytes = match small_body(request.into_body(), 65536, &cancelled).await {
+            let bytes = match small_body(request.into_body(), 16 << 20, &cancelled).await {
                 Ok(bytes) => bytes,
                 Err(_) => return failure(StatusCode::BAD_REQUEST, "invalid resource list"),
             };
-            let names: Vec<String> = match serde_json::from_slice(&bytes) {
-                Ok(names) => names,
+            let names: ExportResources = match serde_json::from_slice(&bytes) {
+                Ok(ResourceSelection::Paths(names)) => {
+                    names.into_iter().map(|name| (name, None)).collect()
+                }
+                Ok(ResourceSelection::Digests(names)) => names.into_iter().collect(),
                 Err(_) => return failure(StatusCode::BAD_REQUEST, "invalid resource list"),
             };
             if names.len() > 4096
-                || names
-                    .iter()
-                    .any(|name| !files::safe_relative(name) || name.ends_with(".sock"))
+                || names.iter().any(|(name, digest)| {
+                    !files::safe_relative(name)
+                        || name.ends_with(".sock")
+                        || digest.as_ref().is_some_and(|hash| {
+                            hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        })
+                })
             {
                 return failure(StatusCode::BAD_REQUEST, "invalid resource path");
             }
@@ -465,7 +485,7 @@ impl Service {
         self: Arc<Self>,
         generation: u64,
         cancelled: Arc<AtomicBool>,
-        names: Option<Vec<String>>,
+        names: Option<ExportResources>,
     ) -> HttpResponse {
         let (sender, receiver) = mpsc::channel(4);
         let (ready, prepared) = oneshot::channel();
@@ -498,15 +518,20 @@ impl Service {
                         "smart.db-shm",
                     ]
                     .into_iter()
-                    .map(str::to_owned)
+                    .map(|name| (name.to_owned(), None))
                     .collect()
                 });
-                for name in names {
+                for (name, digest) in names {
                     let path = life.root.join("data").join(&name);
                     if !path.try_exists()? {
                         continue;
                     }
                     let file = files::checked_open(&path)?;
+                    if let Some(expected) = digest
+                        && expected.eq_ignore_ascii_case(&files::file_hash(&path)?)
+                    {
+                        continue;
+                    }
                     total += file.metadata()?.len();
                     ensure!(total <= 512 << 20, "state export exceeds 512MiB");
                     files.push((name, file));
@@ -521,7 +546,9 @@ impl Service {
                     if ready.send(true).is_err() {
                         return;
                     }
-                    let mut output = ChannelWriter { sender, cancelled };
+                    // Coalesce small base64 writes before channel backpressure.
+                    let mut output =
+                        io::BufWriter::with_capacity(65536, ChannelWriter { sender, cancelled });
                     let result = (|| -> Result<()> {
                         output.write_all(b"{\"files\":[")?;
                         for (index, (name, file)) in files.iter_mut().enumerate() {
@@ -540,10 +567,12 @@ impl Service {
                             output.write_all(b"\"}")?;
                         }
                         output.write_all(b"]}")?;
+                        output.flush()?;
                         Ok(())
                     })();
                     if result.is_err() {
                         let _ = output
+                            .get_mut()
                             .sender
                             .try_send(Err(io::Error::other("state export interrupted")));
                     }

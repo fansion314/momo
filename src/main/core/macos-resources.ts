@@ -18,7 +18,7 @@ export async function syncMacResources(): Promise<void> {
   if (!names.length) return
   const result = await macServiceRequest<{ files: { path: string; data: string }[] }>(
     '/v1/core/resources',
-    names,
+    Object.fromEntries(names.map((name) => [name, resources[name].digest ?? null])),
     60000
   )
   let size = 0

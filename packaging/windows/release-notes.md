@@ -1,5 +1,6 @@
-Clash Momo 2.0.4-7（macOS r7），配套内核为 Mihomomo 1.19.33-5。
+Clash Momo 2.0.4-8（macOS r8），配套内核为 Mihomomo 1.19.33-5。
 
+- 修复资源回传造成的重启超时：批量流式写入，仅回传内容变化的文件，状态查询不再等待生命周期锁。
 - 修复 macOS 中文、空格、Emoji 和带斜杠分组的节点切换、测速、Provider 更新及 Smart 权重访问。
 - 修正 TLS 客户端证书校验模式与内核选项的兼容，提供真实双向 TLS 连接回归。
 - 恢复 macOS TCP/TLS/Unix 外部控制器，支持密钥、CORS、HTTP/WebSocket、WebUI 静态面板和下载更新。

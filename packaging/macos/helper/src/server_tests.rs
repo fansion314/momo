@@ -317,16 +317,61 @@ async fn real_http_lease_stays_independent_of_lifecycle_lock() {
         let _ = released.recv_timeout(Duration::from_secs(3));
     });
     started.await.unwrap();
-    let result = tokio::time::timeout(
-        Duration::from_millis(500),
-        harness.request("POST", "/v1/lease", Some(&token), None, b"{}"),
-    )
-    .await;
+    let (result, status) = tokio::join!(
+        tokio::time::timeout(
+            Duration::from_millis(500),
+            harness.request("POST", "/v1/lease", Some(&token), None, b"{}")
+        ),
+        tokio::time::timeout(
+            Duration::from_millis(500),
+            harness.request("GET", "/v1/status", None, None, b"")
+        )
+    );
     release.send(()).unwrap();
     holder.await.unwrap();
     assert_eq!(
         result.expect("lease was blocked by lifecycle lock").0,
         StatusCode::OK
+    );
+    assert_eq!(
+        status.expect("status was blocked by lifecycle lock").0,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn bulk_resource_export_is_buffered_and_skips_unchanged_bytes() {
+    let Some(harness) = Harness::new().await else {
+        return;
+    };
+    let token = harness.session().await;
+    let path = harness.root.path().join("data/resource.bin");
+    files::atomic_write(&path, &vec![b'x'; 4 << 20], 0o600).unwrap();
+    let (status, bytes) = tokio::time::timeout(
+        Duration::from_secs(4),
+        harness.request(
+            "POST",
+            "/v1/core/resources",
+            Some(&token),
+            None,
+            br#"["resource.bin"]"#,
+        ),
+    )
+    .await
+    .expect("small base64 writes throttled resource export");
+    assert_eq!(status, StatusCode::OK);
+    assert!(bytes.len() > 4 << 20);
+    drop(bytes);
+    let body =
+        serde_json::to_vec(&serde_json::json!({"resource.bin":files::file_hash(&path).unwrap()}))
+            .unwrap();
+    let (status, bytes) = harness
+        .request("POST", "/v1/core/resources", Some(&token), None, &body)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+        serde_json::json!({"files":[]})
     );
 }
 

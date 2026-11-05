@@ -110,7 +110,7 @@ rules: ["MATCH,DIRECT"]
     (value) => value.running && value.compatible,
     'Managed service readiness'
   )
-  assert.equal(service.helperVersion, '3')
+  assert.equal(service.helperVersion, '4')
   await waitFor(
     () => invoke(page, 'mihomoProxies'),
     (value) => value.proxies?.[group],
@@ -192,7 +192,7 @@ rules: ["MATCH,DIRECT"]
   assert.equal((await fetch(`${controller}/restart`, { method: 'POST', headers })).status, 200)
   await waitFor(
     () => invoke(page, 'macServiceStatus'),
-    (value) => value.running && value.pid !== previousPID,
+    (value) => value.running && value.pid > 1 && value.pid !== previousPID,
     'Service PID changed after restart'
   )
   await waitFor(

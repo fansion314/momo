@@ -81,7 +81,7 @@ assert status['running'] and status['pid'] > 1
 version = request('GET', '/core/version', token=token)
 assert version['version'] == '1.19.33'
 assert request('GET', '/core/traffic-history/status', token=token)['enabled']
-if status.get('helperVersion') == '3':
+if status.get('helperVersion') in ('3', '4'):
     group = quote('🚀 节点/选择', safe='')
     request('PUT', '/core/proxies/' + group, {'name': '节点/B'}, token, expected=204)
     assert request('GET', '/core/proxies/' + group, token=token)['now'] == '节点/B'
