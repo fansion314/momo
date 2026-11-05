@@ -8,8 +8,12 @@ cp "$root"/packaging/arch/{PKGBUILD,clash-momo,clash-momo.desktop} /tmp/recipe/
 cd /tmp/recipe
 sed -i "s/@COMMIT@/$commit/" PKGBUILD
 sed -i "s/@LAUNCHER_SHA@/$(sha256sum clash-momo | cut -d' ' -f1)/;s/@DESKTOP_SHA@/$(sha256sum clash-momo.desktop | cut -d' ' -f1)/" PKGBUILD
-curl -fL -o /tmp/mihomomo.pkg.tar.zst https://github.com/fansion314/momo/releases/download/mihomomo-v1.19.33-4/mihomomo-1.19.33-4-x86_64.pkg.tar.zst
-curl -fL -o /tmp/mihomomo.pkg.tar.zst.sig https://github.com/fansion314/momo/releases/download/mihomomo-v1.19.33-4/mihomomo-1.19.33-4-x86_64.pkg.tar.zst.sig
+core_tag=$(node -p 'require(process.argv[1]).coreTag' "$root/packaging/macos/release.json")
+[[ "$core_tag" =~ ^mihomomo-v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
+core_version=${core_tag#mihomomo-v}
+core_url="https://github.com/fansion314/momo/releases/download/$core_tag/mihomomo-$core_version-x86_64.pkg.tar.zst"
+curl -fL -o /tmp/mihomomo.pkg.tar.zst "$core_url"
+curl -fL -o /tmp/mihomomo.pkg.tar.zst.sig "$core_url.sig"
 curl -fL -o /tmp/fansionia.asc https://raw.githubusercontent.com/fansion314/packages/main/arch/keys/fansionia.asc
 mkdir -m 700 /tmp/momo-gnupg
 GNUPGHOME=/tmp/momo-gnupg gpg --batch --import /tmp/fansionia.asc
