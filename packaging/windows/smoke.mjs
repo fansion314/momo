@@ -118,7 +118,6 @@ async function launch() {
     path.resolve(installed ? dataDir : path.join(appDir, 'data'))
   )
   const version = await invoke(page, 'mihomoVersion')
-  assert.match(JSON.stringify(version), /1\.19\.33/)
   const corePath = path.join(appDir, 'resources/sidecar/mihomomo.exe')
   assert.equal(
     await readFile(path.join(appDir, 'resources/files/licenses/clash-momo.txt'), 'utf8'),
@@ -129,7 +128,9 @@ async function launch() {
     await readFile(path.join(appDir, 'resources/files/mihomomo-manifest.json'), 'utf8')
   )
   const { coreTag } = JSON.parse(await readFile('packaging/macos/release.json', 'utf8'))
-  assert.equal(manifest.tag, expectedCoreTag || coreTag)
+  const pairedTag = expectedCoreTag || coreTag
+  assert.equal(manifest.tag, pairedTag)
+  assert.equal(version.version, pairedTag.slice('mihomomo-v'.length).replace(/-\d+$/, ''))
   assert.equal(
     createHash('sha256')
       .update(await readFile(corePath))
