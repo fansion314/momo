@@ -3,6 +3,7 @@ Mihomomo 1.19.34-1（macOS r6）同步包含 MetaCubeX v1.19.34 的 vernesong/Al
 - 固定上游快照 `2e6fc107c403ca607714f1613a758e66f12d16e9`，以上一快照为基线应用增量补丁。
 - 新增 Snell v6、Shadowsocks 多用户监听和密钥生成，修复 HTTP CONNECT 首包、HTTPUpgrade 链接转换、SSH 连接关闭及 TUN 自动路由。
 - 同步上游 EasyTier、sing、sing-tun 与 uTLS 依赖；保留 Smart、流量历史、每日聚合及 macOS 受保护服务功能。
+- 修复流量历史关闭时固定两秒批次超时导致的提前丢弃；最终写入使用配置的关闭预算，整体关闭仍受同一截止时间限制。
 - Tizi 功能保持撤回，已有账户和账本不删除。
 
 Arch Linux x86_64、macOS 15+ ARM64 和 Windows 10/11 x64 继续提供正式资产与 SHA-256。Arch 包附带签名；macOS 内核采用 ad-hoc 签名。Windows 客户端内置精确配套内核，无需另装。

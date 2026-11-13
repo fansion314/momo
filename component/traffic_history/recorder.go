@@ -302,7 +302,7 @@ func (r *Recorder) flush(force bool) bool {
 	if !force && time.Now().Before(r.retryAt) {
 		return false
 	}
-	ctx, cancel := context.WithTimeout(r.ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.ctx, r.writeTimeout(force))
 	defer cancel()
 	if err := r.writeBatch(ctx, r.pending); err != nil {
 		r.failure(err)
@@ -339,8 +339,17 @@ func (r *Recorder) drain() {
 	}
 }
 
-func (r *Recorder) sample() {
-	if !r.flush(false) {
+func (r *Recorder) writeTimeout(shutdown bool) time.Duration {
+	if shutdown {
+		// Close cancels r.ctx at the overall deadline. Do not discard a slow
+		// final batch merely because the normal periodic-write budget elapsed.
+		return r.cfg.ShutdownTimeout
+	}
+	return 2 * time.Second
+}
+
+func (r *Recorder) sample(shutdown bool) {
+	if !r.flush(shutdown) {
 		r.skipped.Add(1)
 		return
 	}
@@ -351,7 +360,7 @@ func (r *Recorder) sample() {
 		// Interleave final records with sampling instead of building a full
 		// snapshot or making the producer queue wait for a complete traversal.
 		r.drain()
-		if len(r.pending) == r.cfg.BatchSize && !r.flush(false) {
+		if len(r.pending) == r.cfg.BatchSize && !r.flush(shutdown) {
 			r.skipped.Add(1)
 			return false
 		}
@@ -361,12 +370,12 @@ func (r *Recorder) sample() {
 		}
 		r.pending = append(r.pending, rec.clone())
 		if len(r.pending) == r.cfg.BatchSize {
-			return r.flush(false)
+			return r.flush(shutdown)
 		}
 		return true
 	})
-	if r.flush(false) {
-		ctx, cancel := context.WithTimeout(r.ctx, 2*time.Second)
+	if r.flush(shutdown) {
+		ctx, cancel := context.WithTimeout(r.ctx, r.writeTimeout(shutdown))
 		if err := r.reconcile(ctx); err != nil {
 			r.failure(err)
 		}
@@ -410,7 +419,7 @@ func (r *Recorder) run() {
 	defer cleanup.Stop()
 	cleanupPending := r.cfg.RetentionDays != 0
 	var lastCleanup time.Time
-	r.sample() // Establish a baseline for connections predating this session.
+	r.sample(false) // Establish a baseline for connections predating this session.
 	for {
 		var input <-chan Record
 		if len(r.pending) < r.cfg.BatchSize {
@@ -423,7 +432,7 @@ func (r *Recorder) run() {
 				r.flush(false)
 			}
 		case <-samples.C:
-			r.sample()
+			r.sample(false)
 		case <-cleanup.C:
 			cleanupPending = true
 		case <-flush.C:
@@ -455,7 +464,7 @@ func (r *Recorder) run() {
 			}
 		case <-r.stop:
 			r.retryAt = time.Time{}
-			r.sample()
+			r.sample(true)
 			r.stopAccepting()
 			for {
 				r.drain()
@@ -466,7 +475,7 @@ func (r *Recorder) run() {
 					break
 				}
 			}
-			ctx, cancel := context.WithTimeout(r.ctx, 2*time.Second)
+			ctx, cancel := context.WithTimeout(r.ctx, r.writeTimeout(true))
 			err := r.finish(ctx)
 			cancel()
 			if err != nil {

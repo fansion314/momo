@@ -264,6 +264,63 @@ func TestServiceCloseAndConcurrentAdmission(t *testing.T) {
 	}
 }
 
+// A slow final transaction may use the configured shutdown budget, while
+// Close still enforces one deadline for the entire drain.
+func TestForcedFlushUsesShutdownBudget(t *testing.T) {
+	r := testRecorder(t)
+	rec := testRecord(r, "slow-final", 1, 2)
+	rec.Closed = true
+	if !r.reserve(&rec) {
+		t.Fatal("reservation failed")
+	}
+	r.pending = append(r.pending, rec)
+	r.db.SetMaxOpenConns(1)
+	connection, err := r.db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	// Hold the only writer connection beyond the normal two-second budget.
+	timer := time.AfterFunc(2200*time.Millisecond, func() { _ = connection.Close() })
+	defer timer.Stop()
+	if !r.flush(true) {
+		t.Fatal(r.Status())
+	}
+	if scalar(t, r, "SELECT COUNT(*) FROM flows WHERE state='closed'") != 1 {
+		t.Fatal("final record was lost")
+	}
+	if len(r.slots) != 0 || r.pendingBytes.Load() != 0 {
+		t.Fatal("committed records retained their admission budget")
+	}
+}
+
+func TestCloseHonorsConfiguredDeadline(t *testing.T) {
+	r := testRecorder(t)
+	r.cfg.ShutdownTimeout = 100 * time.Millisecond
+	r.db.SetMaxOpenConns(1)
+	connection, err := r.db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if !r.Record(testRecord(r, "blocked-final", 1, 2)) {
+		t.Fatal("admission failed")
+	}
+	go r.run()
+	started := time.Now()
+	if err := r.Close(); err == nil {
+		t.Fatal("blocked shutdown did not report its deadline")
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("shutdown exceeded its configured overall budget")
+	}
+	select {
+	case <-r.done:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not stop after shutdown cancellation")
+	}
+}
+
 func BenchmarkFinalAdmission(b *testing.B) {
 	r := testRecorder(b)
 	rec := testRecord(r, "flow", 1, 2)
