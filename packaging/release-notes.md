@@ -1,11 +1,10 @@
-Mihomomo 1.19.33-5 修复 macOS 服务模式的功能兼容，与 Clash Momo 2.0.4-6 配套。
+Mihomomo 1.19.34-1（macOS r6）同步包含 MetaCubeX v1.19.34 的 vernesong/Alpha 快照，与 Clash Momo 2.0.4-9 配套。
 
-- 恢复服务模式的 GeoData、LightGBM 模型维护 API，保留模型更新校验和既有历史数据。
-- NTP 的显式 `write-to-system` 设置在服务模式与普通运行中保持一致，不再被静默关闭。
-- 公共控制器、WebUI 和生命周期管理由新版 Clash Momo 的普通用户进程接入；受保护内核继续通过本地 socket 与 helper 通信。
+- 固定上游快照 `2e6fc107c403ca607714f1613a758e66f12d16e9`，以上一快照为基线应用增量补丁。
+- 新增 Snell v6、Shadowsocks 多用户监听和密钥生成，修复 HTTP CONNECT 首包、HTTPUpgrade 链接转换、SSH 连接关闭及 TUN 自动路由。
+- 同步上游 EasyTier、sing、sing-tun 与 uTLS 依赖；保留 Smart、流量历史、每日聚合及 macOS 受保护服务功能。
 - Tizi 功能保持撤回，已有账户和账本不删除。
 
-- Arch Linux x86_64 与 macOS 15+ ARM64 继续通过 fansionia packages 分发。
-- 新增 Windows 10/11 x64 内核 ZIP、来源清单和 SHA-256。Windows 仅发布 GitHub Release；Clash Momo Windows 安装包和便携包已内置此版本内核，无需另装。
-- macOS 用户升级内核后，请在 Clash Momo 内核设置中更新网络服务，使受保护的内核副本同步升级。
-- Windows 原生 CI 检查内核启动、实际代理通信、流量历史持久化、TUN 创建/通信/清理；管理员 runner 不代表人工完成过 UAC 确认/取消交互。
+Arch Linux x86_64、macOS 15+ ARM64 和 Windows 10/11 x64 继续提供正式资产与 SHA-256。Arch 包附带签名；macOS 内核采用 ad-hoc 签名。Windows 客户端内置精确配套内核，无需另装。
+
+macOS 用户升级内核与客户端后，请在 Clash Momo“内核设置 → 更新网络服务”完成授权，使受保护副本同步升级。原生 CI 验证不能代替人工 UAC、桌面授权和物理网络验收。
