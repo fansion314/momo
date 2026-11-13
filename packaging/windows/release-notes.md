@@ -1,6 +1,7 @@
 Clash Momo 2.0.4-9（macOS r9），配套内核为 Mihomomo 1.19.34-1（macOS r6）。
 
 - 升级包含 MetaCubeX v1.19.34 的 Alpha 内核快照，保留 Smart、流量历史、每日聚合及现有平台适配。
+- 节点编辑器支持选择新内核提供的 Snell 6。
 - Arch 源码与二进制配方要求新内核；Windows 安装版、便携版内置此精确配套版本。
 - macOS 服务验收按配套元数据检查实际内核版本，并回归既有 helper 升级、节点切换和控制器行为。
 

@@ -115,7 +115,7 @@ export const KCPTUN_CRYPTS = [
   'none'
 ] as const
 
-export const SNEL_VERSIONS = ['1', '2', '3', '4', '5'] as const
+export const SNEL_VERSIONS = ['1', '2', '3', '4', '5', '6'] as const
 
 export const HYSTERIA_PROTOCOLS = ['udp', 'wechat-video', 'faketcp'] as const
 
