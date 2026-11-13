@@ -2,6 +2,7 @@
 import http.client
 import json
 import os
+from pathlib import Path
 import socket
 import subprocess
 import time
@@ -79,7 +80,8 @@ request('POST', '/v1/lease', {}, token)
 status = request('GET', '/v1/status')
 assert status['running'] and status['pid'] > 1
 version = request('GET', '/core/version', token=token)
-assert version['version'] == '1.19.33'
+expected_core = json.loads(Path('packaging/macos/release.json').read_text())['coreTag']
+assert version['version'] == expected_core.removeprefix('mihomomo-v').rsplit('-', 1)[0]
 assert request('GET', '/core/traffic-history/status', token=token)['enabled']
 if status.get('helperVersion') in ('3', '4'):
     group = quote('🚀 节点/选择', safe='')
