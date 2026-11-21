@@ -21,6 +21,12 @@ const ProfileCardContent: React.FC<Props> = (props) => {
   const extra = info.extra
   const usage = (extra?.upload ?? 0) + (extra?.download ?? 0)
   const total = extra?.total ?? 0
+  const typeChip =
+    info.type === 'local'
+      ? t('profiles.local')
+      : info.type === 'remote' && !extra
+        ? t('profiles.remote')
+        : null
   return (
     <>
       <CardBody className="pb-1">
@@ -67,31 +73,22 @@ const ProfileCardContent: React.FC<Props> = (props) => {
         )}
       </CardBody>
       <CardFooter className="pt-0">
-        {info.type === 'remote' && !extra && (
+        {typeChip && (
           <div
-            className={`w-full mt-2 flex justify-between ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`}
+            className={`w-full mt-2 flex justify-between items-center ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`}
           >
-            <Chip
-              size="sm"
-              variant="bordered"
-              className={`${isCurrent ? 'text-primary-foreground border-primary-foreground' : 'border-primary text-primary'}`}
-            >
-              {t('profiles.remote')}
-            </Chip>
-            <small>{dayjs(info.updated).fromNow()}</small>
-          </div>
-        )}
-        {info.type === 'local' && (
-          <div
-            className={`mt-2 flex justify-between ${isCurrent ? 'text-primary-foreground' : 'text-foreground'}`}
-          >
-            <Chip
-              size="sm"
-              variant="bordered"
-              className={`${isCurrent ? 'text-primary-foreground border-primary-foreground' : 'border-primary text-primary'}`}
-            >
-              {t('profiles.local')}
-            </Chip>
+            <div className="flex gap-1">
+              {typeChip && (
+                <Chip
+                  size="sm"
+                  variant="bordered"
+                  className={`${isCurrent ? 'text-primary-foreground border-primary-foreground' : 'border-primary text-primary'}`}
+                >
+                  {typeChip}
+                </Chip>
+              )}
+            </div>
+            {info.type === 'remote' && !extra && <small>{dayjs(info.updated).fromNow()}</small>}
           </div>
         )}
         {extra && (

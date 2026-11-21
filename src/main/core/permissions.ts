@@ -7,6 +7,7 @@ import { mihomoCorePath } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import { checkAutoRun, enableAutoRun } from '../sys/autoRun'
 import i18next from '../../shared/i18n'
+import { disableSysProxySync } from '../sys/sysproxy'
 import { checkAdminPrivileges } from './admin'
 import { ensureMacService, macServiceStatus } from './macos-service'
 import { windowsElevationCommand } from './windows-elevation'
@@ -139,6 +140,7 @@ export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
   await execFilePromise(command.program, command.args, { windowsHide: true, timeout: 300000 })
   managerLogger.info('Administrator restart authorized; stopping the current core')
   await stopCoreBeforeAdminRestart?.(true)
+  disableSysProxySync()
   app.exit(0)
 }
 

@@ -44,7 +44,7 @@ const EditInfoModal: React.FC<Props> = (props) => {
           <SettingItem title={t('override.editInfo.name')}>
             <Input
               size="sm"
-              className="w-[200px]"
+              className="w-50"
               value={values.name}
               onValueChange={(v) => {
                 setValues({ ...values, name: v })
@@ -55,7 +55,7 @@ const EditInfoModal: React.FC<Props> = (props) => {
             <SettingItem title={t('override.editInfo.url')}>
               <Input
                 size="sm"
-                className="w-[200px]"
+                className="w-50"
                 value={values.url}
                 onValueChange={(v) => {
                   setValues({ ...values, url: v })

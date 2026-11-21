@@ -5,7 +5,7 @@ import {
 } from '@renderer/utils/ipc'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
-import { Button, Chip } from '@heroui/react'
+import { Button, Chip, Input } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
 import { IoMdRefresh } from 'react-icons/io'
 import { CgLoadbarDoc } from 'react-icons/cg'
@@ -14,17 +14,21 @@ import dayjs from '@renderer/utils/dayjs'
 import { calcTraffic } from '@renderer/utils/calc'
 import { getHash } from '@renderer/utils/hash'
 import { useTranslation } from 'react-i18next'
-import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useActiveProfile } from '@renderer/hooks/use-active-profile'
+import { useGroups } from '@renderer/hooks/use-groups'
+import { includesIgnoreCase } from '@renderer/utils/includes'
 import { FaPlus } from 'react-icons/fa6'
-import SimpleProviderModal from '../simple/simple-provider-modal'
+import ProviderModal from '../local/provider-modal'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import QrCodeModal from '../profiles/qr-code-modal'
 import Viewer from './viewer'
-const ProxyProvider: React.FC = () => {
+/* eslint-disable react/prop-types */
+const ProxyProvider: React.FC<{ editing?: boolean }> = ({ editing: editingProp }) => {
   const { t } = useTranslation()
-  const { appConfig } = useAppConfig()
-  const simpleMode = appConfig?.operationMode === 'simple'
+  const { isLocalActive: localMode } = useActiveProfile()
+  const { mutate: mutateGroups } = useGroups()
+  const editing = !!editingProp && localMode
   const [showDetails, setShowDetails] = useState({
     show: false,
     path: '',
@@ -35,6 +39,12 @@ const ProxyProvider: React.FC = () => {
   const [qrCode, setQrCode] = useState<{ name: string; url: string } | null>(null)
   const [editorName, setEditorName] = useState<string | undefined>()
   const [editorOpen, setEditorOpen] = useState(false)
+  useEffect(() => {
+    if (!editing) {
+      setEditorOpen(false)
+      setEditorName(undefined)
+    }
+  }, [editing])
   useEffect(() => {
     if (showDetails.title) {
       const fetchProviderPath = async (name: string): Promise<void> => {
@@ -57,6 +67,11 @@ const ProxyProvider: React.FC = () => {
   }, [showDetails.title])
 
   const { data, mutate } = useSWR('mihomoProxyProviders', mihomoProxyProviders)
+  useEffect(
+    () => window.electron.ipcRenderer.on('proxyProvidersUpdated', () => void mutate()),
+    [mutate]
+  )
+  const [filter, setFilter] = useState('')
   const providers = useMemo(() => {
     if (!data || !data.providers) return []
     return Object.values(data.providers)
@@ -66,6 +81,10 @@ const ProxyProvider: React.FC = () => {
         return (order[a.vehicleType] || 4) - (order[b.vehicleType] || 4)
       })
   }, [data])
+  const filteredProviders = useMemo(
+    () => providers.filter((provider) => !filter || includesIgnoreCase(provider.name, filter)),
+    [filter, providers]
+  )
   const [updating, setUpdating] = useState(Array(providers.length).fill(false))
 
   const onUpdate = async (name: string, index: number): Promise<void> => {
@@ -86,7 +105,15 @@ const ProxyProvider: React.FC = () => {
     }
   }
 
-  if (!providers.length && !simpleMode) {
+  const updateProviders = async (targets: IMihomoProxyProvider[]): Promise<void> => {
+    await Promise.all(
+      targets.map((provider) => onUpdate(provider.name, providers.indexOf(provider)))
+    )
+    // 代理组的节点列表来自 provider，只刷新这里的话代理组页面要等 30s 轮询才看到新节点（#638、#1153）
+    mutateGroups()
+  }
+
+  if (!providers.length && !localMode) {
     return null
   }
 
@@ -105,7 +132,7 @@ const ProxyProvider: React.FC = () => {
   return (
     <SettingCard>
       {editorOpen && (
-        <SimpleProviderModal
+        <ProviderModal
           kind="proxy-providers"
           name={editorName}
           onClose={() => setEditorOpen(false)}
@@ -126,9 +153,18 @@ const ProxyProvider: React.FC = () => {
           }
         />
       )}
-      <SettingItem title={t('resources.proxyProviders.title')} divider>
-        <div className="flex items-center gap-2">
-          {simpleMode && (
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider pb-2">
+        <h4 className="min-w-0 wrap-break-word text-md">{t('resources.proxyProviders.title')}</h4>
+        <div className="flex min-w-0 items-center gap-2">
+          <Input
+            size="sm"
+            className="w-28 sm:w-40"
+            value={filter}
+            placeholder={t('resources.proxyProviders.filter')}
+            isClearable
+            onValueChange={setFilter}
+          />
+          {editing && (
             <>
               <Button
                 size="sm"
@@ -145,9 +181,9 @@ const ProxyProvider: React.FC = () => {
                 size="sm"
                 variant="flat"
                 startContent={<MdEditDocument />}
-                isDisabled={!providers.length}
+                isDisabled={!filteredProviders.length}
                 onPress={() => {
-                  setEditorName(providers[0]?.name)
+                  setEditorName(filteredProviders[0]?.name)
                   setEditorOpen(true)
                 }}
               >
@@ -158,104 +194,104 @@ const ProxyProvider: React.FC = () => {
           <Button
             size="sm"
             color="primary"
-            isDisabled={!providers.length}
-            onPress={() => {
-              providers.forEach((provider, index) => {
-                onUpdate(provider.name, index)
-              })
-            }}
+            isDisabled={!filteredProviders.length}
+            onPress={() => updateProviders(filteredProviders)}
           >
             {t('resources.proxyProviders.updateAll')}
           </Button>
         </div>
-      </SettingItem>
-      {providers.map((provider, index) => (
-        <Fragment key={provider.name}>
-          <SettingItem
-            title={provider.name}
-            actions={
-              <Chip className="ml-2" size="sm">
-                {provider.proxies?.length || 0}
-              </Chip>
-            }
-            divider={!provider.subscriptionInfo && index !== providers.length - 1}
-          >
-            <div className="flex h-[32px] leading-[32px] text-foreground-500">
-              <div>{dayjs(provider.updatedAt).fromNow()}</div>
-              {provider.vehicleType === 'HTTP' && (
+      </div>
+      {filteredProviders.map((provider) => {
+        const index = providers.indexOf(provider)
+        return (
+          <Fragment key={provider.name}>
+            <SettingItem
+              title={provider.name}
+              actions={
+                <Chip className="ml-2" size="sm">
+                  {provider.proxies?.length || 0}
+                </Chip>
+              }
+              divider={!provider.subscriptionInfo && index !== providers.length - 1}
+            >
+              <div className="flex h-8 leading-8 text-foreground-500">
+                <div>{dayjs(provider.updatedAt).fromNow()}</div>
+                {provider.vehicleType === 'HTTP' && (
+                  <Button
+                    isIconOnly
+                    title={t('profiles.qrCode.show')}
+                    className="ml-2"
+                    size="sm"
+                    onPress={() => onShowQrCode(provider.name)}
+                  >
+                    <MdQrCode2 className="text-lg" />
+                  </Button>
+                )}
                 <Button
                   isIconOnly
-                  title={t('profiles.qrCode.show')}
+                  title={
+                    provider.vehicleType === 'File'
+                      ? t('common.editor.edit')
+                      : t('common.viewer.view')
+                  }
                   className="ml-2"
                   size="sm"
-                  onPress={() => onShowQrCode(provider.name)}
+                  onPress={() => {
+                    if (editing) {
+                      setEditorName(provider.name)
+                      setEditorOpen(true)
+                    } else {
+                      setShowDetails({
+                        show: false,
+                        privderType: 'proxy-providers',
+                        path: provider.name,
+                        type: provider.vehicleType,
+                        title: provider.name
+                      })
+                    }
+                  }}
                 >
-                  <MdQrCode2 className="text-lg" />
+                  {provider.vehicleType === 'File' ? (
+                    <MdEditDocument className={`text-lg`} />
+                  ) : (
+                    <CgLoadbarDoc className={`text-lg`} />
+                  )}
                 </Button>
-              )}
-              <Button
-                isIconOnly
-                title={
-                  provider.vehicleType === 'File'
-                    ? t('common.editor.edit')
-                    : t('common.viewer.view')
-                }
-                className="ml-2"
-                size="sm"
-                onPress={() => {
-                  if (simpleMode) {
-                    setEditorName(provider.name)
-                    setEditorOpen(true)
-                  } else {
-                    setShowDetails({
-                      show: false,
-                      privderType: 'proxy-providers',
-                      path: provider.name,
-                      type: provider.vehicleType,
-                      title: provider.name
-                    })
-                  }
-                }}
-              >
-                {provider.vehicleType === 'File' ? (
-                  <MdEditDocument className={`text-lg`} />
-                ) : (
-                  <CgLoadbarDoc className={`text-lg`} />
-                )}
-              </Button>
-              <Button
-                isIconOnly
-                title={t('common.updater.update')}
-                className="ml-2"
-                size="sm"
-                onPress={() => {
-                  onUpdate(provider.name, index)
-                }}
-              >
-                <IoMdRefresh className={`text-lg ${updating[index] ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-          </SettingItem>
-          {!simpleMode && provider.subscriptionInfo && (
-            <SettingItem
-              divider={index !== providers.length - 1}
-              title={
-                <div className="text-foreground-500">
-                  {`${calcTraffic(
-                    provider.subscriptionInfo.Upload + provider.subscriptionInfo.Download
-                  )} / ${calcTraffic(provider.subscriptionInfo.Total)}`}
-                </div>
-              }
-            >
-              <div className="h-[32px] leading-[32px] text-foreground-500">
-                {provider.subscriptionInfo.Expire
-                  ? new Date(provider.subscriptionInfo.Expire * 1000).toLocaleDateString()
-                  : t('profiles.neverExpire')}
+                <Button
+                  isIconOnly
+                  title={t('common.updater.update')}
+                  className="ml-2"
+                  size="sm"
+                  onPress={() => updateProviders([provider])}
+                >
+                  <IoMdRefresh className={`text-lg ${updating[index] ? 'animate-spin' : ''}`} />
+                </Button>
               </div>
             </SettingItem>
-          )}
-        </Fragment>
-      ))}
+            {!localMode && provider.subscriptionInfo && (
+              <SettingItem
+                divider={index !== providers.length - 1}
+                title={
+                  <div className="text-foreground-500">
+                    {`${calcTraffic(
+                      provider.subscriptionInfo.Upload + provider.subscriptionInfo.Download
+                    )} / ${calcTraffic(provider.subscriptionInfo.Total)}`}
+                  </div>
+                }
+              >
+                <div className="h-8 leading-8 text-foreground-500">
+                  {provider.subscriptionInfo.Expire
+                    ? new Date(provider.subscriptionInfo.Expire * 1000).toLocaleDateString()
+                    : t('profiles.neverExpire')}
+                </div>
+              </SettingItem>
+            )}
+          </Fragment>
+        )
+      })}
+      {!filteredProviders.length && (
+        <div className="py-6 text-center text-sm text-foreground/50">{t('traffic.noData')}</div>
+      )}
     </SettingCard>
   )
 }

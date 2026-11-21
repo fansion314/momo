@@ -18,9 +18,6 @@ const DNSPage = createPreloadablePage(() => import('@renderer/pages/dns'))
 const SnifferPage = createPreloadablePage(() => import('@renderer/pages/sniffer'))
 const SubStorePage = createPreloadablePage(() => import('@renderer/pages/substore'))
 const TrafficPage = createPreloadablePage(() => import('@renderer/pages/traffic'))
-// Both modes share the subscription manager and profile library.
-const SimplePage = ProfilesPage
-const SimpleModulePage = createPreloadablePage(() => import('@renderer/pages/simple-module'))
 
 export const NetworkPageComponent = NetworkPage.Page
 export const Override = OverridePage.Page
@@ -38,8 +35,6 @@ export const DNS = DNSPage.Page
 export const Sniffer = SnifferPage.Page
 export const SubStore = SubStorePage.Page
 export const Traffic = TrafficPage.Page
-export const Simple = SimplePage.Page
-export const SimpleModule = SimpleModulePage.Page
 
 // 默认落地页立即预加载，避免首屏等待 chunk 下载。
 void ProxiesPage.preload().catch(() => {})

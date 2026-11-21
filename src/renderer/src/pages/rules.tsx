@@ -6,7 +6,7 @@ import { Button, Divider, Input, Spinner } from '@heroui/react'
 import { useRules } from '@renderer/hooks/use-rules'
 import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useTranslation } from 'react-i18next'
-import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useActiveProfile } from '@renderer/hooks/use-active-profile'
 import useSWR from 'swr'
 import { MdAdd } from 'react-icons/md'
 import {
@@ -25,12 +25,12 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import SortableGroup from '@renderer/components/proxies/sortable-group'
-import EditModeMenu from '@renderer/components/simple/edit-mode-menu'
+import EditModeMenu from '@renderer/components/local/edit-mode-menu'
 import RuleEditorModal from '@renderer/components/rules/rule-editor-modal'
-import { getSimpleRulesEditor, saveSimpleRules } from '@renderer/utils/ipc'
+import { getLocalRulesEditor, saveLocalRules } from '@renderer/utils/ipc'
 import { toast } from '@renderer/components/base/toast'
-import { parseSimpleRule } from '../../../shared/simple-rules'
-import type { SimpleRuleEditor } from '../../../shared/simple-config'
+import { parseLocalRule } from '../../../shared/local-rules'
+import type { LocalRuleEditor } from '../../../shared/local-config'
 
 const RULES_FILTER_KEY = 'rules-filter'
 
@@ -38,24 +38,23 @@ const Rules: React.FC = () => {
   const { rules, mutate } = useRules()
   const [filter, setFilter] = useState(() => localStorage.getItem(RULES_FILTER_KEY) || '')
   const { t } = useTranslation()
-  const { appConfig } = useAppConfig()
-  const simple = appConfig?.operationMode === 'simple'
+  const { isLocalActive: localMode } = useActiveProfile()
   const [editMode, setEditMode] = useState(false)
-  const editing = simple && editMode
+  const editing = localMode && editMode
   const {
     data,
     error,
     mutate: refresh
-  } = useSWR(editing ? 'getSimpleRulesEditor' : null, getSimpleRulesEditor)
+  } = useSWR(editing ? 'getLocalRulesEditor' : null, getLocalRulesEditor)
   const [editor, setEditor] = useState<{
     index: number | null
     insertAt?: number
-    data: SimpleRuleEditor
+    data: LocalRuleEditor
   }>()
   const [savingOrder, setSavingOrder] = useState(false)
   useEffect(() => {
     if (!editing) return
-    return window.electron.ipcRenderer.on('simpleConfigUpdated', () => {
+    return window.electron.ipcRenderer.on('localConfigUpdated', () => {
       void refresh()
     })
   }, [editing, refresh])
@@ -103,7 +102,7 @@ const Rules: React.FC = () => {
     if (from < 0 || to < 0) return
     setSavingOrder(true)
     try {
-      await saveSimpleRules({ action: 'reorder', order: arrayMove(indices, from, to) }, data.rules)
+      await saveLocalRules({ action: 'reorder', order: arrayMove(indices, from, to) }, data.rules)
       await refresh()
       mutate()
     } catch (error) {
@@ -113,11 +112,11 @@ const Rules: React.FC = () => {
     }
   }
   useEffect(() => {
-    if (!simple) {
+    if (!localMode) {
       setEditMode(false)
       setEditor(undefined)
     }
-  }, [simple])
+  }, [localMode])
 
   useEffect(() => {
     localStorage.setItem(RULES_FILTER_KEY, filter)
@@ -126,7 +125,7 @@ const Rules: React.FC = () => {
   const filteredRules = useMemo<IMihomoRulesDetail[]>(() => {
     const entries = editing
       ? (data?.rules || []).map((rule, index) => {
-          const parsed = parseSimpleRule(rule)
+          const parsed = parseLocalRule(rule)
           return {
             index,
             type: parsed.type,
@@ -150,7 +149,7 @@ const Rules: React.FC = () => {
     <BasePage
       title={t('rules.title')}
       header={
-        simple ? (
+        localMode ? (
           <EditModeMenu
             enabled={editing}
             disabled={savingOrder}
@@ -229,7 +228,7 @@ const Rules: React.FC = () => {
                         onDelete={
                           data && !savingOrder
                             ? async () => {
-                                await saveSimpleRules(
+                                await saveLocalRules(
                                   { action: 'remove', index: rule.index },
                                   data.rules
                                 )

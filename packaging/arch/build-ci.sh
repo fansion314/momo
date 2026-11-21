@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+export PACKAGER='Fansionia Packages <packages@fansionia.world>'
 export LANG=C.UTF-8 LC_ALL=C.UTF-8
 root=$1
 commit=$2
@@ -34,6 +35,7 @@ package="/tmp/recipe/${pkgname}-${pkgver}-${pkgrel}-x86_64.pkg.tar.zst"
 tar -xOf "$package" .PKGINFO | grep -Fx "pkgname = $pkgname"
 tar -xOf "$package" .PKGINFO | grep -Fx "pkgver = $pkgver-$pkgrel"
 tar -xOf "$package" .PKGINFO | grep -Fx 'arch = x86_64'
+tar -xOf "$package" .PKGINFO | grep -Fx "packager = $PACKAGER"
 pacman -U --noconfirm "$package"
 getcap /usr/bin/mihomomo | grep -F 'cap_net_bind_service,cap_net_admin,cap_net_raw=ep'
 runuser -u builder -- env ELECTRON_RUN_AS_NODE=1 /usr/bin/electron -e 'process.chdir("/usr/lib/clash-momo"); require("/usr/lib/clash-momo/node_modules/sysproxy-rs"); console.log(process.versions.electron)'

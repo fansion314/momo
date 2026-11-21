@@ -30,6 +30,7 @@ vi.mock('../utils/logger', () => ({
 }))
 vi.mock('../sys/autoRun', () => ({ checkAutoRun: vi.fn(), enableAutoRun: vi.fn() }))
 vi.mock('../../shared/i18n', () => ({ default: { t: (key: string) => key } }))
+vi.mock('../sys/sysproxy', () => ({ disableSysProxySync: vi.fn() }))
 vi.mock('./admin', () => ({ checkAdminPrivileges: checkAdmin }))
 
 beforeEach(() => {

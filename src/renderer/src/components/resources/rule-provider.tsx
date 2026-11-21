@@ -2,8 +2,8 @@ import {
   mihomoRuleProviders,
   mihomoUpdateRuleProviders,
   getRuntimeConfig,
-  getSimpleRulesEditor,
-  saveSimpleRuleProvider
+  getLocalRulesEditor,
+  saveLocalRuleProvider
 } from '@renderer/utils/ipc'
 import { getHash } from '@renderer/utils/hash'
 import React, { Fragment, useEffect, useMemo, useState } from 'react'
@@ -16,26 +16,26 @@ import { MdEdit, MdEditDocument } from 'react-icons/md'
 import dayjs from '@renderer/utils/dayjs'
 import { useTranslation } from 'react-i18next'
 import { includesIgnoreCase } from '@renderer/utils/includes'
-import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useActiveProfile } from '@renderer/hooks/use-active-profile'
 import { FaPlus } from 'react-icons/fa6'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
-import type { SimpleRuleEditor } from '../../../../shared/simple-config'
-import DeleteResourceButton from '../simple/delete-resource-button'
+import type { LocalRuleEditor } from '../../../../shared/local-config'
+import DeleteResourceButton from '../local/delete-resource-button'
 import Viewer from './viewer'
 import RuleProviderEditorModal from './rule-provider-editor-modal'
 
 const RuleProvider: React.FC<{ editing?: boolean }> = (props) => {
   const { t } = useTranslation()
-  const { appConfig } = useAppConfig()
-  const editing = !!props.editing && appConfig?.operationMode === 'simple'
+  const { isLocalActive } = useActiveProfile()
+  const editing = !!props.editing && isLocalActive
   const {
     data: editorData,
     error: editorError,
     mutate: refreshEditor
-  } = useSWR(editing ? 'getSimpleRulesEditor' : null, getSimpleRulesEditor)
+  } = useSWR(editing ? 'getLocalRulesEditor' : null, getLocalRulesEditor)
   const [filter, setFilter] = useState('')
-  const [editor, setEditor] = useState<{ name?: string; data: SimpleRuleEditor }>()
+  const [editor, setEditor] = useState<{ name?: string; data: LocalRuleEditor }>()
   useEffect(() => {
     if (!editing) setEditor(undefined)
   }, [editing])
@@ -72,10 +72,17 @@ const RuleProvider: React.FC<{ editing?: boolean }> = (props) => {
 
   const { data, mutate } = useSWR('mihomoRuleProviders', mihomoRuleProviders)
   useEffect(() => {
-    return window.electron.ipcRenderer.on('simpleConfigUpdated', () => {
+    const unsubscribeProviders = window.electron.ipcRenderer.on('ruleProvidersUpdated', () => {
+      void mutate()
+    })
+    const unsubscribeLocal = window.electron.ipcRenderer.on('localConfigUpdated', () => {
       void mutate()
       if (editing) void refreshEditor()
     })
+    return () => {
+      unsubscribeProviders()
+      unsubscribeLocal()
+    }
   }, [editing, mutate, refreshEditor])
   const allProviders = useMemo(() => {
     if (editing)
@@ -144,7 +151,7 @@ const RuleProvider: React.FC<{ editing?: boolean }> = (props) => {
     })
   }
 
-  if (!allProviders.length && appConfig?.operationMode !== 'simple') {
+  if (!allProviders.length && !isLocalActive) {
     return null
   }
 
@@ -183,7 +190,7 @@ const RuleProvider: React.FC<{ editing?: boolean }> = (props) => {
         />
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider pb-2">
-        <h4 className="min-w-0 break-words text-md">{t('resources.ruleProviders.title')}</h4>
+        <h4 className="min-w-0 wrap-break-word text-md">{t('resources.ruleProviders.title')}</h4>
         <div className="flex min-w-0 items-center gap-2">
           <Input
             size="sm"
@@ -252,7 +259,7 @@ const RuleProvider: React.FC<{ editing?: boolean }> = (props) => {
                 disabled={!editorData}
                 onDelete={async () => {
                   if (!editorData) return
-                  await saveSimpleRuleProvider(
+                  await saveLocalRuleProvider(
                     provider.name,
                     provider.name,
                     null,

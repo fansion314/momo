@@ -28,12 +28,12 @@ describe('system runtime config migration', () => {
       tiziActive: true,
       controlDns: false,
       trafficHistoryRetentionDays: 180,
-      operationMode: 'standard'
+      enableTrafficLogger: true
     } as unknown as IAppConfig)
     expect(config).not.toHaveProperty('tiziActive')
     expect(config.controlDns).toBe(false)
     expect(config.trafficHistoryRetentionDays).toBe(180)
-    expect(config.operationMode).toBe('standard')
+    expect(config.enableTrafficLogger).toBe(true)
   })
   it.each(['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific'])(
     'migrates %s to the system Smart core without changing the override preference',

@@ -6,6 +6,7 @@ import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useActiveProfile } from '@renderer/hooks/use-active-profile'
 import { mihomoHotReloadConfig } from '@renderer/utils/ipc'
 import React, { Key, ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,12 +20,12 @@ const DNS: React.FC = () => {
   const { t } = useTranslation()
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
   const { appConfig, patchAppConfig } = useAppConfig()
+  const { isLocalActive } = useActiveProfile()
   const {
     nameserverPolicy,
     useNameserverPolicy = DEFAULT_USE_NAMESERVER_POLICY,
     controlDns = DEFAULT_CONTROL_DNS,
-    disableDnsOverrideGuard = false,
-    operationMode = 'standard'
+    disableDnsOverrideGuard = false
   } = appConfig || {}
   const { dns, hosts } = controledMihomoConfig || {}
   const {
@@ -46,14 +47,11 @@ const DNS: React.FC = () => {
     fallback = DEFAULT_MIHOMO_DNS_CONFIG.fallback,
     'fallback-filter': fallbackFilter = DEFAULT_MIHOMO_DNS_CONFIG['fallback-filter']
   } = dns || {}
-  const simpleNameserverPolicy = (dns?.['nameserver-policy'] ||
-    {}) as IAppConfig['nameserverPolicy']
-  const effectiveNameserverPolicy =
-    operationMode === 'simple' ? simpleNameserverPolicy : nameserverPolicy
-  const effectiveUseNameserverPolicy =
-    operationMode === 'simple'
-      ? Object.keys(simpleNameserverPolicy).length > 0
-      : useNameserverPolicy
+  const localNameserverPolicy = (dns?.['nameserver-policy'] || {}) as IAppConfig['nameserverPolicy']
+  const effectiveNameserverPolicy = isLocalActive ? localNameserverPolicy : nameserverPolicy
+  const effectiveUseNameserverPolicy = isLocalActive
+    ? Object.keys(localNameserverPolicy).length > 0
+    : useNameserverPolicy
   const [changed, setChanged] = useState(false)
   const [values, originSetValues] = useState({
     enable,
@@ -166,7 +164,7 @@ const DNS: React.FC = () => {
 
   const onSave = async (patch: Partial<IMihomoConfig>): Promise<void> => {
     const nextNameserverPolicy = getNameserverPolicy()
-    if (operationMode !== 'simple') {
+    if (!isLocalActive) {
       await patchAppConfig({
         nameserverPolicy: nextNameserverPolicy,
         useNameserverPolicy: values.useNameserverPolicy
@@ -178,7 +176,7 @@ const DNS: React.FC = () => {
         ...patch,
         dns: patch.dns ? { ...patch.dns, 'nameserver-policy': nextNameserverPolicy } : patch.dns
       })
-      if (operationMode !== 'simple' && controlDns) {
+      if (!isLocalActive && controlDns) {
         await mihomoHotReloadConfig()
       }
     } catch (e) {
@@ -223,22 +221,22 @@ const DNS: React.FC = () => {
                   values.nameserverPolicy.map(({ domain, value }) => [domain, value])
                 )
               }
-              const result = { dns: dnsConfig }
-              if (values.useHosts) {
-                result['hosts'] = Object.fromEntries(
-                  values.hosts.map(({ domain, value }) => [domain, value])
-                )
+              const result = {
+                dns: dnsConfig,
+                hosts: values.useHosts
+                  ? Object.fromEntries(values.hosts.map(({ domain, value }) => [domain, value]))
+                  : {}
               }
               onSave(result)
             }}
           >
-            {operationMode === 'simple' || controlDns ? t('common.save') : t('dns.saveOnly')}
+            {isLocalActive || controlDns ? t('common.save') : t('dns.saveOnly')}
           </Button>
         )
       }
     >
       <SettingCard>
-        {operationMode !== 'simple' && (
+        {!isLocalActive && (
           <SettingItem title={t('dns.enable')} divider>
             <Switch
               size="sm"
@@ -249,7 +247,7 @@ const DNS: React.FC = () => {
             />
           </SettingItem>
         )}
-        {operationMode !== 'simple' && (
+        {!isLocalActive && (
           <SettingItem title={t('dns.overrideGuard.disable')} divider>
             <Switch
               size="sm"

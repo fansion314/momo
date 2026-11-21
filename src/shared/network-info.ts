@@ -1,4 +1,4 @@
-export type IPProvider = 'ip.sb' | 'ipwho.is' | 'ipapi.is' | 'geojs'
+export type IPProvider = 'ip.sb' | 'ipwho.is' | 'ipapi.is' | 'geojs' | 'internetdata'
 
 export type IPInfoSource = IPProvider | 'ipapi.co' | 'skk.moe' | 'Cloudflare'
 

@@ -39,7 +39,7 @@ async function updateProfile(id: string): Promise<void> {
       // 动态 import 避免与 window.ts 形成静态循环依赖
       const { mainWindow } = await import('../window')
       mainWindow?.webContents.send('profileConfigUpdated')
-    } else if (item && item.type === 'plugin' && item.pluginId) {
+    } else if (item?.pluginId) {
       const { updatePluginProfile } = await import('../resolve/plugin')
       await updatePluginProfile(item.pluginId)
     }
@@ -49,7 +49,7 @@ async function updateProfile(id: string): Promise<void> {
 }
 
 async function auditPluginProfileVault(item: IProfileItem): Promise<void> {
-  if (item.type !== 'plugin' || !item.pluginId) return
+  if (!item.pluginId) return
   try {
     const { auditPluginVault } = await import('../resolve/plugin')
     await auditPluginVault(item.pluginId)
@@ -69,8 +69,7 @@ function updateTask(itemId: string, logLabel: string): () => Promise<void> {
 }
 
 function scheduleProfileUpdate(item: IProfileItem): void {
-  if ((item.type !== 'remote' && item.type !== 'plugin') || !item.autoUpdate || !item.interval)
-    return
+  if ((!item.pluginId && item.type !== 'remote') || !item.autoUpdate || !item.interval) return
 
   const itemId = item.id
   const logLabel = `profile ${itemId}`
@@ -131,7 +130,7 @@ export async function initProfileUpdater(): Promise<void> {
       }
     }
 
-    if (item.type === 'plugin' && item.autoUpdate && item.interval) {
+    if (item.pluginId && item.autoUpdate && item.interval) {
       await addProfileUpdater(item)
     }
   }
@@ -155,7 +154,7 @@ export async function initProfileUpdater(): Promise<void> {
   }
 
   if (
-    currentItem?.type === 'plugin' &&
+    currentItem?.pluginId &&
     currentItem.autoUpdate &&
     currentItem.interval &&
     currentItem.id !== 'default'

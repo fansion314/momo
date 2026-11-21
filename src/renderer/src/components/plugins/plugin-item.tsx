@@ -69,10 +69,10 @@ const PluginItem: React.FC<Props> = ({ item, onChanged }) => {
       <CardBody className="flex flex-col gap-2 overflow-x-hidden">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-1.5 text-primary min-w-0">
-            <TbPuzzle className="text-lg flex-shrink-0" />
+            <TbPuzzle className="text-lg shrink-0" />
             <span className="font-bold text-foreground truncate">{item.name}</span>
           </div>
-          <Chip size="sm" color={statusColor[item.status]} className="flex-shrink-0">
+          <Chip size="sm" color={statusColor[item.status]} className="shrink-0">
             {t(`plugins.status.${item.status}`)}
           </Chip>
         </div>
@@ -88,12 +88,12 @@ const PluginItem: React.FC<Props> = ({ item, onChanged }) => {
           </div>
         )}
         {item.lastProviderMessage && (
-          <div className="text-xs text-warning whitespace-pre-line break-words">
+          <div className="text-xs text-warning whitespace-pre-line wrap-break-word">
             {t('plugins.providerMessage')}: {item.lastProviderMessage}
           </div>
         )}
         {item.description && (
-          <div className="text-xs text-foreground-500 whitespace-pre-line break-words">
+          <div className="text-xs text-foreground-500 whitespace-pre-line wrap-break-word">
             {item.description}
           </div>
         )}

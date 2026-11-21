@@ -91,7 +91,7 @@ vi.mock('../utils/dirs', () => ({
     return join(testDir, 'profile.yaml')
   },
   profilePath: (id: string) => join(testDir, 'profiles', `${id}.yaml`),
-  simpleConfigPath: () => join(testDir, 'simple-config.yaml'),
+  localConfigPath: () => join(testDir, 'local-config.yaml'),
   overrideConfigPath: () => join(testDir, 'override.yaml'),
   overridePath: (id: string, ext: string) => join(testDir, 'overrides', `${id}.${ext}`)
 }))
@@ -485,7 +485,7 @@ describe('plugin subscription validation (BL-002)', () => {
     expect(vi.mocked(addProfileUpdater)).toHaveBeenCalledOnce()
     expect(vi.mocked(addProfileUpdater).mock.calls[0][0]).toMatchObject({
       id: 'plugin1',
-      type: 'plugin',
+      type: 'local',
       autoUpdate: true,
       interval: 60
     })

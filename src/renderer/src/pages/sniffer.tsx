@@ -5,6 +5,7 @@ import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useActiveProfile } from '@renderer/hooks/use-active-profile'
 import { mihomoHotReloadConfig } from '@renderer/utils/ipc'
 import React, { ReactNode, useState } from 'react'
 import { MdDeleteForever } from 'react-icons/md'
@@ -15,7 +16,8 @@ const Sniffer: React.FC = () => {
   const { t } = useTranslation()
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
   const { appConfig } = useAppConfig()
-  const { controlSniff = DEFAULT_CONTROL_SNIFF, operationMode = 'standard' } = appConfig || {}
+  const { isLocalActive } = useActiveProfile()
+  const { controlSniff = DEFAULT_CONTROL_SNIFF } = appConfig || {}
   const { sniffer } = controledMihomoConfig || {}
   const {
     enable = DEFAULT_MIHOMO_SNIFFER_CONFIG.enable,
@@ -53,7 +55,7 @@ const Sniffer: React.FC = () => {
       setChanged(false)
       await patchControledMihomoConfig(patch)
 
-      if (operationMode !== 'simple' && controlSniff) {
+      if (!isLocalActive && controlSniff) {
         await mihomoHotReloadConfig()
       }
     } catch (e) {
@@ -139,13 +141,13 @@ const Sniffer: React.FC = () => {
               })
             }
           >
-            {operationMode === 'simple' || controlSniff ? t('common.save') : t('sniffer.saveOnly')}
+            {isLocalActive || controlSniff ? t('common.save') : t('sniffer.saveOnly')}
           </Button>
         )
       }
     >
       <SettingCard>
-        {operationMode !== 'simple' && (
+        {!isLocalActive && (
           <SettingItem title={t('sniffer.enable')} divider>
             <Switch
               size="sm"

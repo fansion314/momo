@@ -84,6 +84,7 @@ describe('configureAppPaths', () => {
 
     expect(setName).toHaveBeenCalledWith('clash-momo-dev')
     expect(paths.userData).toBe(path.join(APP_DATA, 'clash-momo-dev'))
+    expect(paths.sessionData).toBe(path.join(APP_DATA, 'clash-momo-dev', 'cache'))
   })
 
   it('isolates packaged builds from upstream production paths', async () => {
@@ -153,5 +154,6 @@ describe('configureAppPaths', () => {
     configureAppPaths()
     expect(dataDir()).toBe(path.join(EXE_DIR, 'data'))
     expect(trafficUsageDatabasePath()).toBe(path.join(EXE_DIR, 'data', 'traffic-usage.db'))
+    expect(paths.sessionData).toBe(path.join(EXE_DIR, 'data', 'cache'))
   })
 })

@@ -16,8 +16,6 @@ import {
   Sniffer,
   SubStore,
   Sysproxy,
-  Simple,
-  SimpleModule,
   Traffic,
   Tun
 } from './route-pages'
@@ -28,20 +26,8 @@ const HomeRedirect: React.FC = () => {
   const { appConfig } = useAppConfig()
 
   if (!appConfig) return null
-  const dest =
-    appConfig.operationMode === 'simple'
-      ? 'simple'
-      : appConfig.rememberSelectedSiderCard
-        ? appConfig.lastSelectedSiderCard
-        : 'proxy'
-  if (dest === 'simple') return <Navigate to="/simple" replace />
+  const dest = appConfig.rememberSelectedSiderCard ? appConfig.lastSelectedSiderCard : 'proxy'
   return <Navigate to={getSiderCardRoute(dest)} replace />
-}
-
-const ProfilesRoute: React.FC = () => {
-  const { appConfig } = useAppConfig()
-  if (!appConfig) return null
-  return appConfig.operationMode === 'simple' ? <Navigate to="/simple" replace /> : <Profiles />
 }
 
 const routes = [
@@ -95,7 +81,7 @@ const routes = [
   },
   {
     path: '/profiles',
-    element: <ProfilesRoute />
+    element: <Profiles />
   },
   {
     path: '/settings',
@@ -108,14 +94,6 @@ const routes = [
   {
     path: '/traffic',
     element: <Traffic />
-  },
-  {
-    path: '/simple',
-    element: <Simple />
-  },
-  {
-    path: '/simple/:module',
-    element: <SimpleModule />
   },
   {
     path: '/',

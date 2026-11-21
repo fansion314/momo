@@ -96,7 +96,11 @@ import {
   setupFirewall
 } from '../sys/misc'
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
-import { setControlDns, takeDnsOverrideAutoDisabledNotice } from '../core/dnsOverrideGuard'
+import {
+  localSwitchNeedsDnsConfirm,
+  setControlDns,
+  takeDnsOverrideAutoDisabledNotice
+} from '../core/dnsOverrideGuard'
 import { getSmartModelStatus, downloadSmartModel } from '../core/smartModel'
 import {
   listWebdavBackups,
@@ -155,29 +159,26 @@ import {
   patchAppConfigWithHistory
 } from '../core/traffic-history'
 import {
-  getSimpleConfig,
-  getSimpleNode,
-  createSimpleNodes,
-  saveSimpleNode,
-  removeSimpleNode,
-  getSimpleProxyGroup,
-  getSimpleRulesEditor,
-  saveSimpleRules,
-  saveSimpleRuleProvider,
-  createSimpleProxyGroup,
-  saveSimpleProxyGroup,
-  removeSimpleProxyGroup,
-  reorderSimpleProxyGroups,
-  saveSimpleDraft,
-  previewSimpleConfig,
-  publishSimpleConfig,
-  exportSimpleConfig,
-  importSimpleSubscription,
-  refreshSimpleSource,
-  removeSimpleSource,
-  attachSimpleSubscriptionGroups
-} from '../simple/service'
-import { setOperationMode } from '../simple/mode'
+  getLocalConfig,
+  getLocalNode,
+  createLocalNodes,
+  saveLocalNode,
+  removeLocalNode,
+  getLocalProxyGroup,
+  getLocalRulesEditor,
+  saveLocalRules,
+  saveLocalRuleProvider,
+  createLocalProxyGroup,
+  saveLocalProxyGroup,
+  removeLocalProxyGroup,
+  reorderLocalProxyGroups,
+  saveLocalDraft,
+  previewLocalConfig,
+  publishLocalConfig,
+  exportLocalConfig,
+  refreshLocalSource,
+  removeLocalSource
+} from '../local/service'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { fetchIPInfo } from './network-info'
@@ -291,6 +292,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   setControlDns,
   takeDnsOverrideAutoDisabledNotice,
   // Profile
+  localSwitchNeedsDnsConfirm,
   getProfileConfig,
   setProfileConfig,
   getCurrentProfileItem,
@@ -322,28 +324,25 @@ const asyncHandlers: Record<string, AsyncFn> = {
   getSmartOverrideContent,
   getRuleStr,
   setRuleStr,
-  getSimpleConfig,
-  getSimpleNode,
-  createSimpleNodes,
-  saveSimpleNode,
-  removeSimpleNode,
-  getSimpleProxyGroup,
-  getSimpleRulesEditor,
-  saveSimpleRules,
-  saveSimpleRuleProvider,
-  createSimpleProxyGroup,
-  saveSimpleProxyGroup,
-  removeSimpleProxyGroup,
-  reorderSimpleProxyGroups,
-  saveSimpleDraft,
-  previewSimpleConfig,
-  publishSimpleConfig,
-  exportSimpleConfig,
-  importSimpleSubscription,
-  refreshSimpleSource,
-  removeSimpleSource,
-  attachSimpleSubscriptionGroups,
-  setOperationMode,
+  getLocalConfig,
+  getLocalNode,
+  createLocalNodes,
+  saveLocalNode,
+  removeLocalNode,
+  getLocalProxyGroup,
+  getLocalRulesEditor,
+  saveLocalRules,
+  saveLocalRuleProvider,
+  createLocalProxyGroup,
+  saveLocalProxyGroup,
+  removeLocalProxyGroup,
+  reorderLocalProxyGroups,
+  saveLocalDraft,
+  previewLocalConfig,
+  publishLocalConfig,
+  exportLocalConfig,
+  refreshLocalSource,
+  removeLocalSource,
   readTextFile,
   // Core
   restartCore,
@@ -454,6 +453,114 @@ const syncHandlers: Record<string, SyncFn> = {
     app.quit()
   },
   quitApp: () => app.quit()
+}
+
+const confirmationRequiredHandlers = new Set([
+  'closeMainWindow',
+  'downloadAndInstallUpdate',
+  'importLocalBackup',
+  'installSpecificMihomoCore',
+  'openFile',
+  'quitApp',
+  'quitWithoutCore',
+  'relaunchApp',
+  'removeLocalNode',
+  'removeLocalProxyGroup',
+  'removeLocalSource',
+  'removeOverrideItem',
+  'removePlugin',
+  'removeProfileItem',
+  'resetAppConfig',
+  'restartAsAdmin',
+  'setupFirewall',
+  'webdavDelete'
+])
+
+const mcpExposedHandlers = new Set([
+  'getAppConfig',
+  'patchAppConfig',
+  'getControledMihomoConfig',
+  'patchControledMihomoConfig',
+  'setControlDns',
+  'getProfileConfig',
+  'getCurrentProfileItem',
+  'getProfileItem',
+  'getProfileStr',
+  'getProfileImportInfo',
+  'setProfileStr',
+  'addProfileItem',
+  'removeProfileItem',
+  'updateProfileItem',
+  'changeCurrentProfile',
+  'getOverrideConfig',
+  'getOverrideItem',
+  'addOverrideItem',
+  'removeOverrideItem',
+  'updateOverrideItem',
+  'getOverride',
+  'setOverride',
+  'getRuntimeConfig',
+  'getRuntimeConfigStr',
+  'getRuleStr',
+  'setRuleStr',
+  'getLocalConfig',
+  'getLocalNode',
+  'getLocalProxyGroup',
+  'getLocalRulesEditor',
+  'previewLocalConfig',
+  'mihomoVersion',
+  'mihomoCloseConnection',
+  'mihomoCloseAllConnections',
+  'mihomoRules',
+  'mihomoRulesDisable',
+  'mihomoProxies',
+  'mihomoGroups',
+  'mihomoProxyProviders',
+  'mihomoUpdateProxyProviders',
+  'mihomoRuleProviders',
+  'mihomoUpdateRuleProviders',
+  'mihomoChangeProxy',
+  'mihomoUnfixedProxy',
+  'mihomoProxyDelay',
+  'mihomoGroupDelay',
+  'patchMihomoConfig',
+  'mihomoHotReloadConfig',
+  'mihomoSmartGroupWeights',
+  'mihomoSmartFlushCache',
+  'restartCore'
+])
+
+export interface IpcCapability {
+  name: string
+  kind: 'async' | 'sync'
+  requiresConfirmation: boolean
+}
+
+export const ipcCapabilities: IpcCapability[] = [
+  ...Object.keys(asyncHandlers).map((name) => ({
+    name,
+    kind: 'async' as const,
+    requiresConfirmation: confirmationRequiredHandlers.has(name)
+  })),
+  ...Object.keys(syncHandlers).map((name) => ({
+    name,
+    kind: 'sync' as const,
+    requiresConfirmation: confirmationRequiredHandlers.has(name)
+  }))
+]
+
+export const mcpCapabilities = ipcCapabilities.filter((capability) =>
+  mcpExposedHandlers.has(capability.name)
+)
+
+export async function invokeIpcHandler(name: string, args: unknown[]): Promise<unknown> {
+  const handler = asyncHandlers[name] ?? syncHandlers[name]
+  if (!handler) throw new Error(`Unknown IPC capability: ${name}`)
+  return await (handler as (...args: unknown[]) => unknown)(...args)
+}
+
+export function ipcHandlerRequiresConfirmation(name: string): boolean {
+  return confirmationRequiredHandlers.has(name)
 }
 
 export function registerIpcMainHandlers(): void {

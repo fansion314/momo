@@ -16,10 +16,10 @@ import dayjs from '@renderer/utils/dayjs'
 import { BiCopy } from 'react-icons/bi'
 import { IoAdd } from 'react-icons/io5'
 import { useTranslation } from 'react-i18next'
-import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { getSimpleRulesEditor } from '@renderer/utils/ipc'
+import { useActiveProfile } from '@renderer/hooks/use-active-profile'
+import { getLocalRulesEditor } from '@renderer/utils/ipc'
 import SettingItem from '../base/base-setting-item'
-import type { SimpleRuleEditor } from '../../../../shared/simple-config'
+import type { LocalRuleEditor } from '../../../../shared/local-config'
 import RuleEditorModal from '../rules/rule-editor-modal'
 
 interface Props {
@@ -34,8 +34,8 @@ const CopyableSettingItem: React.FC<{
   prefix?: string[]
 }> = ({ title, value, displayName, prefix = [] }) => {
   const { t } = useTranslation()
-  const { appConfig } = useAppConfig()
-  const [ruleEditor, setRuleEditor] = React.useState<SimpleRuleEditor>()
+  const { isLocalActive } = useActiveProfile()
+  const [ruleEditor, setRuleEditor] = React.useState<LocalRuleEditor>()
   const [ruleValue, setRuleValue] = React.useState<string>()
   const getSubDomains = (domain: string): string[] =>
     domain.split('.').length <= 2
@@ -109,10 +109,10 @@ const CopyableSettingItem: React.FC<{
 
   const openRuleEditor = async (key: string): Promise<void> => {
     try {
-      setRuleEditor(await getSimpleRulesEditor())
+      setRuleEditor(await getLocalRulesEditor())
       setRuleValue(`${key},DIRECT`)
     } catch (error) {
-      console.error('[Connections] failed to load simple rules', error)
+      console.error('[Connections] failed to load local rules', error)
     }
   }
 
@@ -129,25 +129,19 @@ const CopyableSettingItem: React.FC<{
             <DropdownTrigger>
               <Button
                 title={
-                  appConfig?.operationMode === 'simple'
-                    ? t('connections.detail.addRule')
-                    : t('connections.detail.copyRule')
+                  isLocalActive ? t('connections.detail.addRule') : t('connections.detail.copyRule')
                 }
                 isIconOnly
                 size="sm"
                 variant="light"
                 className="h-8 w-8 min-w-8 p-0"
               >
-                {appConfig?.operationMode === 'simple' ? (
-                  <IoAdd className="text-lg" />
-                ) : (
-                  <BiCopy className="text-lg" />
-                )}
+                {isLocalActive ? <IoAdd className="text-lg" /> : <BiCopy className="text-lg" />}
               </Button>
             </DropdownTrigger>
             <DropdownMenu
               onAction={(key) => {
-                if (appConfig?.operationMode === 'simple') void openRuleEditor(key as string)
+                if (isLocalActive) void openRuleEditor(key as string)
                 else
                   void navigator.clipboard.writeText(
                     key === 'raw'
@@ -159,7 +153,7 @@ const CopyableSettingItem: React.FC<{
               }}
             >
               {validMenuItems
-                .filter((item) => appConfig?.operationMode !== 'simple' || item.key !== 'raw')
+                .filter((item) => !isLocalActive || item.key !== 'raw')
                 .map(({ key, text }) => (
                   <DropdownItem key={key}>{text}</DropdownItem>
                 ))}

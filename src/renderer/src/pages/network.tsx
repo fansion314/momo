@@ -103,7 +103,8 @@ const providers: { value: IPProvider; label: string }[] = [
   { value: 'ip.sb', label: 'IP.SB' },
   { value: 'ipwho.is', label: 'ipwho.is' },
   { value: 'ipapi.is', label: 'ipapi.is' },
-  { value: 'geojs', label: 'GeoJS' }
+  { value: 'geojs', label: 'GeoJS' },
+  { value: 'internetdata', label: 'InternetData' }
 ]
 
 const sourceLabels: Record<IPInfo['source'], string> = {
@@ -113,6 +114,7 @@ const sourceLabels: Record<IPInfo['source'], string> = {
   'ipapi.co': 'ipapi.co',
   'skk.moe': 'SKK',
   geojs: 'GeoJS',
+  internetdata: 'InternetData',
   Cloudflare: 'Cloudflare'
 }
 

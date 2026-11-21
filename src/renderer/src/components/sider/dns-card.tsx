@@ -4,10 +4,11 @@ import BorderSwitch from '@renderer/components/base/border-switch'
 import BaseConfirmModal from '@renderer/components/base/base-confirm-modal'
 import { LuServer } from 'react-icons/lu'
 import { useLocation } from 'react-router-dom'
-import { patchControledMihomoConfig, setControlDns, getSimpleConfig } from '@renderer/utils/ipc'
+import { patchControledMihomoConfig, setControlDns, getLocalConfig } from '@renderer/utils/ipc'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useActiveProfile } from '@renderer/hooks/use-active-profile'
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import useSWR from 'swr'
@@ -21,9 +22,10 @@ interface Props {
 const DNSCard: React.FC<Props> = (props) => {
   const { t } = useTranslation()
   const { appConfig, mutateAppConfig } = useAppConfig()
-  const { data: simpleState, mutate: mutateSimpleState } = useSWR(
-    appConfig?.operationMode === 'simple' ? 'getSimpleConfig' : null,
-    getSimpleConfig
+  const { isLocalActive } = useActiveProfile()
+  const { data: localState, mutate: mutateLocalState } = useSWR(
+    isLocalActive ? 'getLocalConfig' : null,
+    getLocalConfig
   )
   const { iconOnly, expanded } = props
   const [applying, setApplying] = useState(false)
@@ -32,13 +34,12 @@ const DNSCard: React.FC<Props> = (props) => {
   const {
     dnsCardStatus = 'col-span-1',
     controlDns = DEFAULT_CONTROL_DNS,
-    disableAnimations = false,
-    operationMode = 'standard'
+    disableAnimations = false
   } = appConfig || {}
   const location = useLocation()
   const match = location.pathname.includes('/dns')
-  const simpleDnsEnabled = simpleState
-    ? !/^enable:\s*false\s*$/m.test(simpleState.published.modules.dns || '')
+  const localDnsEnabled = localState
+    ? !/^enable:\s*false\s*$/m.test(localState.published.modules.dns || '')
     : true
   const {
     attributes,
@@ -55,9 +56,9 @@ const DNSCard: React.FC<Props> = (props) => {
     if (applying) return
     setApplying(true)
     try {
-      if (operationMode === 'simple') {
+      if (isLocalActive) {
         await patchControledMihomoConfig({ dns: { enable: enabled } })
-        await mutateSimpleState()
+        await mutateLocalState()
         return
       }
       const result = await setControlDns(enabled, confirmed)
@@ -96,15 +97,15 @@ const DNSCard: React.FC<Props> = (props) => {
       <>
         <SiderItem
           className={dnsCardStatus}
-          title={operationMode === 'simple' ? 'DNS' : t('sider.cards.dns')}
+          title={isLocalActive ? 'DNS' : t('sider.cards.dns')}
           route="/dns"
           icon={<LuServer className="text-[20px]" />}
           expanded={expanded}
         >
           <BorderSwitch
-            aria-label={operationMode === 'simple' ? 'DNS' : t('sider.cards.dns')}
-            isShowBorder={match && (operationMode === 'simple' ? simpleDnsEnabled : controlDns)}
-            isSelected={operationMode === 'simple' ? simpleDnsEnabled : controlDns}
+            aria-label={isLocalActive ? 'DNS' : t('sider.cards.dns')}
+            isShowBorder={match && (isLocalActive ? localDnsEnabled : controlDns)}
+            isSelected={isLocalActive ? localDnsEnabled : controlDns}
             onValueChange={onChange}
           />
         </SiderItem>
@@ -143,8 +144,8 @@ const DNSCard: React.FC<Props> = (props) => {
               />
             </Button>
             <BorderSwitch
-              isShowBorder={match && (operationMode === 'simple' ? simpleDnsEnabled : controlDns)}
-              isSelected={operationMode === 'simple' ? simpleDnsEnabled : controlDns}
+              isShowBorder={match && (isLocalActive ? localDnsEnabled : controlDns)}
+              isSelected={isLocalActive ? localDnsEnabled : controlDns}
               onValueChange={onChange}
             />
           </div>
@@ -153,7 +154,7 @@ const DNSCard: React.FC<Props> = (props) => {
           <h3
             className={`text-md font-bold sider-card-title ${match ? 'text-primary-foreground' : 'text-foreground'}`}
           >
-            {operationMode === 'simple' ? 'DNS' : t('sider.cards.dns')}
+            {isLocalActive ? 'DNS' : t('sider.cards.dns')}
           </h3>
         </CardFooter>
       </Card>

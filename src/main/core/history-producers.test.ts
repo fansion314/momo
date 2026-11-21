@@ -1,17 +1,16 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { defaultSimpleDraft } from '../../shared/simple-config'
+import { defaultLocalDraft } from '../../shared/local-config'
 import { parse } from '../utils/yaml'
 
 const mocks = vi.hoisted(() => ({
   config: {
     core: 'mihomomo',
-    operationMode: 'standard',
     enableTrafficLogger: true,
     trafficHistoryRetentionDays: 30
   } as IAppConfig,
   write: vi.fn(),
-  simpleCompile: vi.fn()
+  localCompile: vi.fn()
 }))
 const workDir = path.join('/tmp', 'clash-momo-history-tests', 'work')
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
@@ -32,8 +31,8 @@ vi.mock('../utils/dirs', () => ({
   mihomoProfileWorkDir: (id: string) => path.join('/tmp', 'clash-momo-history-tests', 'work', id),
   mihomoWorkConfigPath: (id: string) =>
     path.join('/tmp', 'clash-momo-history-tests', 'work', id, 'config.yaml'),
-  simpleConfigPath: () => '/tmp/clash-momo-history-tests/simple.yaml',
-  simpleOutputPath: () => '/tmp/clash-momo-history-tests/simple.generated.yaml',
+  localConfigPath: () => '/tmp/clash-momo-history-tests/simple.yaml',
+  localOutputPath: () => '/tmp/clash-momo-history-tests/simple.generated.yaml',
   overridePath: vi.fn(),
   rulePath: () => '/tmp/clash-momo-history-tests/rules.yaml'
 }))
@@ -56,8 +55,8 @@ vi.mock('../config', () => ({
 vi.mock('../config/app', () => ({ getAppConfig: async () => mocks.config }))
 vi.mock('../utils/logger', () => ({ createLogger: () => ({ info: vi.fn(), error: vi.fn() }) }))
 vi.mock('../utils/age', () => ({ decryptAgeContent: vi.fn() }))
-vi.mock('../simple/service', () => ({ compileSimpleRuntime: () => mocks.simpleCompile() }))
-vi.mock('../simple/subscriptions', () => ({ resolveSimpleDraft: async (draft: unknown) => draft }))
+vi.mock('../local/service', () => ({ compileLocalRuntime: () => mocks.localCompile() }))
+vi.mock('../local/subscriptions', () => ({ resolveLocalDraft: async (draft: unknown) => draft }))
 vi.mock('./dnsOverrideGuard', () => ({
   evaluateDnsOverrideGuard: () => ({
     controlDns: false,
@@ -71,7 +70,6 @@ beforeEach(() => {
   mocks.write.mockReset().mockResolvedValue(undefined)
   mocks.config = {
     core: 'mihomomo',
-    operationMode: 'standard',
     enableTrafficLogger: true,
     trafficHistoryRetentionDays: 30
   } as IAppConfig
@@ -112,15 +110,15 @@ describe('native history config in actual profile producers', () => {
     })
   })
 
-  it('injects the same application settings after simple-mode compilation', async () => {
-    const { compileAndWriteSimple } = await import('../simple/store')
-    const draft = defaultSimpleDraft()
+  it('injects the same application settings after local profile compilation', async () => {
+    const { compileAndWriteLocal } = await import('../local/store')
+    const draft = defaultLocalDraft()
     draft.preserved = {
       ...draft.preserved,
       'traffic-history': { enable: false, path: '/tmp/wrong.db' }
     }
     const state = { version: 2 as const, revision: 0, draft, published: structuredClone(draft) }
-    const preview = await compileAndWriteSimple(state, true, {})
+    const preview = await compileAndWriteLocal(state, true, {})
     expect(preview.errors).toEqual([])
     expect(lastWrittenHistory()).toMatchObject({
       enable: true,
@@ -129,7 +127,7 @@ describe('native history config in actual profile producers', () => {
     })
     mocks.config.enableTrafficLogger = false
     mocks.config.trafficHistoryRetentionDays = 45
-    await compileAndWriteSimple(state, true, {})
+    await compileAndWriteLocal(state, true, {})
     expect(lastWrittenHistory()).toMatchObject({ enable: false, 'retention-days': 45 })
   })
 })

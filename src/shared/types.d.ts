@@ -283,8 +283,9 @@ interface ISmartModelStatus {
 }
 
 interface IAppConfig {
-  operationMode?: 'standard' | 'simple'
-  modeSelected?: boolean
+  mcpEnabled?: boolean
+  mcpPort?: number
+  mcpToken?: string
   core: 'mihomomo'
   specificVersion?: string
   enableSmartCore: boolean
@@ -387,7 +388,7 @@ interface IAppConfig {
   delayTestUrl?: string
   delayTestTimeout?: number
   networkLatencyTargets?: INetworkLatencyTarget[]
-  networkIPProvider?: 'ip.sb' | 'ipwho.is' | 'ipapi.is' | 'geojs'
+  networkIPProvider?: 'ip.sb' | 'ipwho.is' | 'ipapi.is' | 'geojs' | 'internetdata'
   networkInfoCardOrder?: NetworkInfoCardKey[]
   subscriptionTimeout?: number
   yamlMaxAliasCount?: number
@@ -611,7 +612,7 @@ interface ISubscriptionUserInfo {
 
 interface IProfileItem {
   id: string
-  type: 'remote' | 'local' | 'plugin'
+  type: 'remote' | 'local'
   name: string
   url?: string // remote
   file?: string // local

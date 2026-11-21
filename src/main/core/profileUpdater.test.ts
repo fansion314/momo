@@ -35,7 +35,7 @@ describe('initProfileUpdater', () => {
       items: [
         {
           id: 'profile-plugin',
-          type: 'plugin',
+          type: 'local',
           name: 'Demo',
           pluginId: 'plugin-id',
           autoUpdate: false,

@@ -170,7 +170,7 @@ const PluginInstallModal: React.FC<Props> = ({ onClose, initialFile, initialData
                 {t('plugins.loginUrl')}: <b>{hostOf(preview.loginUrl)}</b>
               </div>
               {preview.description && (
-                <div className="text-foreground-500 whitespace-pre-line break-words">
+                <div className="text-foreground-500 whitespace-pre-line wrap-break-word">
                   {preview.description}
                 </div>
               )}

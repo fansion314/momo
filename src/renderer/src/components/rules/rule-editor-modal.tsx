@@ -12,15 +12,15 @@ import {
   Textarea
 } from '@heroui/react'
 import React, { useState } from 'react'
-import { saveSimpleRules } from '@renderer/utils/ipc'
-import { parseSimpleRule, SIMPLE_RULE_TYPES } from '../../../../shared/simple-rules'
-import type { SimpleRuleEditor } from '../../../../shared/simple-config'
+import { saveLocalRules } from '@renderer/utils/ipc'
+import { parseLocalRule, LOCAL_RULE_TYPES } from '../../../../shared/local-rules'
+import type { LocalRuleEditor } from '../../../../shared/local-config'
 
 interface Props {
   index: number | null
   insertAt?: number
   initialValue?: string
-  data: SimpleRuleEditor
+  data: LocalRuleEditor
   onClose: () => void
   onSaved: () => void
 }
@@ -30,7 +30,7 @@ const RuleEditorModal: React.FC<Props> = (props) => {
   const original = index === null ? undefined : data.rules[index]
   const initialValue = original ?? props.initialValue
   const initial = initialValue
-    ? parseSimpleRule(initialValue)
+    ? parseLocalRule(initialValue)
     : {
         type: 'DOMAIN-SUFFIX',
         payload: '',
@@ -41,7 +41,7 @@ const RuleEditorModal: React.FC<Props> = (props) => {
   const insertAt = props.insertAt ?? data.rules.length
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const types = [...new Set([...SIMPLE_RULE_TYPES, form.type])]
+  const types = [...new Set([...LOCAL_RULE_TYPES, form.type])]
   const targets = form.type === 'SUB-RULE' ? data.subRules : data.outbounds
   const supportsResolve = [
     'GEOIP',
@@ -72,7 +72,7 @@ const RuleEditorModal: React.FC<Props> = (props) => {
         (!Number.isInteger(insertAt) || insertAt < 0 || insertAt > data.rules.length)
       )
         throw new Error('插入位置无效')
-      await saveSimpleRules(
+      await saveLocalRules(
         { action: index === null ? 'add' : 'edit', index: index ?? insertAt, value },
         data.rules
       )
@@ -193,7 +193,7 @@ const RuleEditorModal: React.FC<Props> = (props) => {
             )}
           </fieldset>
           {error && (
-            <div role="alert" className="text-sm text-danger break-words">
+            <div role="alert" className="text-sm text-danger wrap-break-word">
               {error}
             </div>
           )}

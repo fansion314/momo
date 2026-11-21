@@ -25,9 +25,9 @@ import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MdAdd, MdCheck, MdChevronRight, MdClose, MdDragIndicator, MdSearch } from 'react-icons/md'
 import {
-  SIMPLE_BUILTIN_OUTBOUNDS,
-  type SimpleProxyGroupEditor
-} from '../../../../shared/simple-config'
+  LOCAL_BUILTIN_OUTBOUNDS,
+  type LocalProxyGroupEditor
+} from '../../../../shared/local-config'
 
 type MemberField = 'proxies' | 'use'
 interface Member {
@@ -40,8 +40,8 @@ interface Props {
   outbounds: string[]
   providerOptions: string[]
   groupNames: string[]
-  outboundDetails: SimpleProxyGroupEditor['outboundDetails']
-  providerTypes: SimpleProxyGroupEditor['providerTypes']
+  outboundDetails: LocalProxyGroupEditor['outboundDetails']
+  providerTypes: LocalProxyGroupEditor['providerTypes']
   includeAllProxies: boolean
   includeAllProviders: boolean
   disabled: boolean
@@ -238,7 +238,7 @@ const GroupMembersEditor: React.FC<Props> = (props) => {
           if (category === 'groups') return groupNames.includes(name)
           return (
             !groupNames.includes(name) &&
-            (!includeAllProxies || SIMPLE_BUILTIN_OUTBOUNDS.includes(name))
+            (!includeAllProxies || LOCAL_BUILTIN_OUTBOUNDS.includes(name))
           )
         })
   const filtered = names.filter((name) =>
@@ -248,7 +248,7 @@ const GroupMembersEditor: React.FC<Props> = (props) => {
   const sections = new Map<string, { title: string; names: string[] }>()
   for (const name of filtered) {
     const source = outboundDetails[name]?.source
-    const builtin = SIMPLE_BUILTIN_OUTBOUNDS.includes(name)
+    const builtin = LOCAL_BUILTIN_OUTBOUNDS.includes(name)
     const key = builtin ? 'builtin' : source ? `source:${source}` : 'local'
     const section = sections.get(key) || {
       title: builtin ? '内置' : source || '本地节点',

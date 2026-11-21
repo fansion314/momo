@@ -27,7 +27,6 @@ import {
   relaunchApp,
   readImageFileDataURL,
   resolveThemes,
-  setOperationMode,
   showFloatingWindow,
   showTrayIcon,
   startMonitor,
@@ -115,7 +114,6 @@ const GeneralConfig: React.FC = () => {
     githubProxy !== 'direct' &&
     !GITHUB_PROXY_BUILTINS.includes(githubProxy)
   const [customGithubProxy, setCustomGithubProxy] = useState(isCustomGithubProxy ? githubProxy : '')
-  const [switchingMode, setSwitchingMode] = useState(false)
   const patchGithubProxy = debounce(async (v: string) => {
     await patchAppConfig({ githubProxy: v })
   }, 500)
@@ -271,33 +269,6 @@ const GeneralConfig: React.FC = () => {
         />
       )}
       <SettingCard>
-        <SettingItem title={t('settings.operationMode.title')} divider>
-          <Select
-            className="w-37.5"
-            size="sm"
-            aria-label={t('settings.operationMode.title')}
-            isLoading={switchingMode}
-            isDisabled={switchingMode}
-            disallowEmptySelection
-            selectedKeys={[appConfig?.operationMode || 'standard']}
-            onSelectionChange={async (v) => {
-              const next = Array.from(v)[0] as 'standard' | 'simple'
-              if (!next || next === appConfig?.operationMode || switchingMode) return
-              setSwitchingMode(true)
-              try {
-                await setOperationMode(next)
-                toast.success(t(`settings.operationMode.${next}.success`))
-              } catch (error) {
-                toast.error(String(error), t('settings.operationMode.error'))
-              } finally {
-                setSwitchingMode(false)
-              }
-            }}
-          >
-            <SelectItem key="standard">{t('settings.operationMode.standard.label')}</SelectItem>
-            <SelectItem key="simple">{t('settings.operationMode.simple.label')}</SelectItem>
-          </Select>
-        </SettingItem>
         <SettingItem title={t('settings.language')} divider>
           <Select
             classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}

@@ -43,6 +43,8 @@ import {
 } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
 import { initWindowsUpdater } from './resolve/windows-updater'
+import { subscribeAppConfig } from './config/app'
+import { stopMcpServer, syncMcpServer } from './mcp'
 
 async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
   // 仅 PS 3.0+ 写入 \3\ 键（\1\ 键恒为 2.0，不可用）。
@@ -90,6 +92,11 @@ async function ensureSupportedWindowsPowerShell(): Promise<boolean> {
 configureAppPaths()
 
 const mainLogger = createLogger('Main')
+subscribeAppConfig((config) => {
+  if (app.isReady()) {
+    void syncMcpServer(config).catch((error) => mainLogger.warn('Failed to sync MCP server', error))
+  }
+})
 
 export { mainWindow, showMainWindow, triggerMainWindow, closeMainWindow }
 
@@ -304,6 +311,12 @@ app
     })
 
     registerIpcMainHandlers()
+    void syncMcpServer(appConfig).catch((error) =>
+      mainLogger.warn('Failed to start MCP server', error)
+    )
+    app.once('will-quit', () => {
+      void stopMcpServer()
+    })
 
     try {
       await createWindow()
@@ -333,13 +346,6 @@ app
     const coreStartPromise = (async (): Promise<void> => {
       if (!(await startupSafetyPromise)) {
         completeCoreInitialization(false)
-        return
-      }
-
-      // 首次启动必须先由 renderer 完成模式选择，避免在选择前生成标准配置。
-      if (!appConfig.modeSelected) {
-        mainLogger.info('Core startup is waiting for the initial operation mode selection')
-        completeCoreInitialization(true)
         return
       }
 

@@ -25,12 +25,14 @@ import {
   mihomoWorkDir
 } from '../utils/dirs'
 import { uploadRuntimeConfigIfChanged } from '../resolve/gistApi'
+import { isLocalProfile } from '../../shared/local-config'
 import { ensureRuntimeFiles } from '../utils/init'
 import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
 import { createCoreLogWritableStream } from '../utils/logFile'
 import { parse } from '../utils/yaml'
+import { dismissNotification, showNotification } from '../utils/notification'
 import {
   startMihomoTraffic,
   startMihomoConnections,
@@ -73,6 +75,7 @@ import {
 } from './macos-service'
 import { createMacCoreSnapshot, referencedUserResourceDirectories } from './macos-snapshot'
 import { startMacExternalController, stopMacExternalController } from './macos-controller'
+import { parseTailscaleLog } from './tailscale-auth'
 
 // 重新导出权限相关函数
 export {
@@ -103,6 +106,8 @@ const resumeReloadDelay = 5000
 // 同一次失败内核可能连打多行，10 秒内只提示一次，避免弹窗刷屏
 const tunFailureReportInterval = 10000
 const coreProcessNames = ['mihomomo'] as const
+const tailscaleAuthNotificationKeyPrefix = 'tailscale-auth:'
+const directCoreLogLineLimit = 16 * 1024
 
 // 核心进程状态
 interface CoreProcessWatchdog {
@@ -120,6 +125,9 @@ let pendingRestart: Promise<void> | null = null
 let cancelActiveStartup: ((reason: Error) => void) | null = null
 let automaticRestartController: AbortController | null = null
 let resumeReloadTimer: NodeJS.Timeout | null = null
+const notifiedTailscaleAuthKeys = new Set<string>()
+const tailscaleAuthKeysByName = new Map<string, Set<string>>()
+let directCoreLogLineBuffer = ''
 
 // 文件监听器
 let coreWatcherInitialized = false
@@ -252,6 +260,78 @@ function startCoreProcessWatchdog(proc: ChildProcess, detached: boolean): void {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+function notifyTailscaleLog(line: string): void {
+  const event = parseTailscaleLog(line)
+  if (!event) return
+
+  if (event.type === 'done') {
+    clearTailscaleAuthNotifications(event.name)
+    return
+  }
+
+  const { name, url } = event.request
+  const id = `${tailscaleAuthNotificationKeyPrefix}${url}`
+  if (notifiedTailscaleAuthKeys.has(id)) return
+
+  notifiedTailscaleAuthKeys.add(id)
+  const keys = tailscaleAuthKeysByName.get(name) ?? new Set<string>()
+  keys.add(id)
+  tailscaleAuthKeysByName.set(name, keys)
+
+  showNotification({
+    id,
+    title: i18next.t('common.notification.tailscaleAuthTitle', { name }),
+    body: i18next.t('common.notification.tailscaleAuthBody'),
+    persistent: true,
+    url
+  })
+}
+
+function handleDirectCoreLogData(data: Buffer | string): void {
+  const text = data.toString().replaceAll('\r\n', '\n')
+  const combined = directCoreLogLineBuffer + text
+  const lines = combined.split('\n')
+
+  if (combined.endsWith('\n')) {
+    directCoreLogLineBuffer = ''
+  } else {
+    directCoreLogLineBuffer = lines.pop() ?? ''
+    if (directCoreLogLineBuffer.length > directCoreLogLineLimit) {
+      directCoreLogLineBuffer = directCoreLogLineBuffer.slice(-directCoreLogLineLimit)
+    }
+  }
+
+  for (const line of lines) {
+    notifyTailscaleLog(line)
+  }
+}
+
+function flushDirectCoreLogNotifications(): void {
+  if (!directCoreLogLineBuffer) return
+
+  notifyTailscaleLog(directCoreLogLineBuffer)
+  directCoreLogLineBuffer = ''
+}
+
+function clearTailscaleAuthNotifications(name?: string): void {
+  const keys = name
+    ? tailscaleAuthKeysByName.get(name)
+    : new Set(
+        Array.from(notifiedTailscaleAuthKeys).filter((key) =>
+          key.startsWith(tailscaleAuthNotificationKeyPrefix)
+        )
+      )
+  if (!keys) return
+
+  for (const key of keys) {
+    notifiedTailscaleAuthKeys.delete(key)
+    dismissNotification(key)
+  }
+
+  if (name) tailscaleAuthKeysByName.delete(name)
+  else tailscaleAuthKeysByName.clear()
 }
 
 function hookTouchCommand(file: string): string {
@@ -471,7 +551,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     coreStartupMode = 'log',
     testProfileOnStart = true
   } = appConfig
-  if (appConfig.operationMode === 'simple') diffWorkDir = false
 
   let { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
 
@@ -483,12 +562,14 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   // generateProfile 返回实际使用的 current
   const { profileId: current, dnsGuard } = await generateProfile()
-  if (appConfig.operationMode === 'simple') {
-    const simpleRuntime = await getRuntimeConfig()
-    logLevel = simpleRuntime['log-level'] || 'info'
-    tun = simpleRuntime.tun
+  const currentItem = await getProfileItem(current)
+  if (isLocalProfile(currentItem)) {
+    diffWorkDir = false
+    const localRuntime = await getRuntimeConfig()
+    logLevel = localRuntime['log-level'] || 'info'
+    tun = localRuntime.tun
   }
-  const ageSecretKey = (await getProfileItem(current))?.ageSecretKey || ''
+  const ageSecretKey = currentItem?.ageSecretKey || ''
   if (testProfileOnStart) {
     await checkProfile(current, core, diffWorkDir, ageSecretKey)
   }
@@ -580,6 +661,9 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
     const stderr = createCoreLogWritableStream(coreLogPath)
     proc.stdout?.pipe(stdout)
     proc.stderr?.pipe(stderr)
+    proc.stdout?.on('data', handleDirectCoreLogData)
+    proc.stderr?.on('data', handleDirectCoreLogData)
+    proc.once('close', flushDirectCoreLogNotifications)
   }
 
   return proc
@@ -808,6 +892,8 @@ interface CoreStartAttempt {
 
 async function startCoreInternal(detached = false, skipStop = false): Promise<CoreStartAttempt> {
   ensureNotShuttingDown()
+  clearTailscaleAuthNotifications()
+  directCoreLogLineBuffer = ''
   const config = await prepareCore(detached, skipStop)
   ensureNotShuttingDown()
   if (isMacServiceActive()) {

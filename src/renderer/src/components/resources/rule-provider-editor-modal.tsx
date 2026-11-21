@@ -12,14 +12,14 @@ import {
   Tabs
 } from '@heroui/react'
 import React, { useState } from 'react'
-import { saveSimpleRuleProvider } from '@renderer/utils/ipc'
+import { saveLocalRuleProvider } from '@renderer/utils/ipc'
 import { FaPlus } from 'react-icons/fa6'
 import { MdDeleteOutline } from 'react-icons/md'
-import type { SimpleObject, SimpleRuleEditor } from '../../../../shared/simple-config'
+import type { LocalObject, LocalRuleEditor } from '../../../../shared/local-config'
 
 interface Props {
   name?: string
-  data: SimpleRuleEditor
+  data: LocalRuleEditor
   onClose: () => void
   onSaved: () => void
 }
@@ -30,7 +30,7 @@ const RuleProviderEditorModal: React.FC<Props> = (props) => {
     name === undefined
       ? { type: 'http', behavior: 'domain', format: 'yaml', interval: 3600 }
       : data.ruleProviders[name]
-  const [values, setValues] = useState<SimpleObject>(() => structuredClone(initial || {}))
+  const [values, setValues] = useState<LocalObject>(() => structuredClone(initial || {}))
   const [nextName, setNextName] = useState(name || '')
   const [payload, setPayload] = useState<string[]>(() =>
     Array.isArray(initial?.payload) ? initial.payload.map((value) => String(value)) : []
@@ -88,7 +88,7 @@ const RuleProviderEditorModal: React.FC<Props> = (props) => {
     try {
       if (!initial) throw new Error('规则集已不存在，请重新打开编辑器')
       if (nameError) throw new Error(nameError)
-      const value: SimpleObject = { ...values, type, behavior }
+      const value: LocalObject = { ...values, type, behavior }
       if (type === 'http') {
         const url = new URL(String(value.url || ''))
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('URL 必须使用 http(s)')
@@ -115,7 +115,7 @@ const RuleProviderEditorModal: React.FC<Props> = (props) => {
       }
       if (value.format === 'mrs' && behavior === 'classical')
         throw new Error('classical 规则不支持 MRS 格式')
-      await saveSimpleRuleProvider(
+      await saveLocalRuleProvider(
         name,
         nextName.trim(),
         value,
@@ -339,7 +339,7 @@ const RuleProviderEditorModal: React.FC<Props> = (props) => {
             </Tabs>
           </fieldset>
           {error && (
-            <div role="alert" className="text-sm text-danger break-words">
+            <div role="alert" className="text-sm text-danger wrap-break-word">
               {error}
             </div>
           )}

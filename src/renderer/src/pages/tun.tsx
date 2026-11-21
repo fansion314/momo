@@ -102,7 +102,7 @@ const Tun: React.FC = () => {
       await patchControledMihomoConfig({ ...patch, tun: tunPatch })
       // The partial PATCH can fail independently of writing the configuration.
       // Reload the full effective configuration; unchanged TUN settings are not recreated.
-      if (appConfig?.operationMode !== 'simple') await mihomoHotReloadConfig()
+      await mihomoHotReloadConfig()
       setChanged(false)
     } catch (e) {
       showErrorSync(e, t('common.error.updateCoreConfigFailed'))

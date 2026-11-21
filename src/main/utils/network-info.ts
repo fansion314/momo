@@ -10,7 +10,8 @@ const IP_ENDPOINTS: Record<FullInfoSource, string> = {
   'ipapi.is': 'https://api.ipapi.is/',
   'ipapi.co': 'https://ipapi.co/json',
   'skk.moe': 'https://ip.api.skk.moe/cf-geoip',
-  geojs: 'https://get.geojs.io/v1/ip/geo.json'
+  geojs: 'https://get.geojs.io/v1/ip/geo.json',
+  internetdata: 'https://api.internetdata.io/myip'
 }
 const TRACE_ENDPOINT = 'https://www.cloudflare.com/cdn-cgi/trace'
 const FALLBACK_SOURCES: FullInfoSource[] = [
@@ -92,6 +93,25 @@ function parseFullInfo(source: FullInfoSource, value: unknown): IPInfo {
       timezone: text(record(data.timezone).id),
       latitude: number(data.latitude),
       longitude: number(data.longitude)
+    }
+  }
+
+  if (source === 'internetdata') {
+    const location = record(data.location)
+    const connection = record(data.asn)
+    const company = record(data.company)
+    return {
+      ip,
+      source,
+      country: text(location.country_name),
+      countryCode: text(location.country),
+      city: text(location.city),
+      region: text(location.region),
+      asn: number(connection.asn),
+      org: text(company.name) ?? text(connection.name),
+      timezone: text(location.timezone),
+      latitude: number(location.latitude),
+      longitude: number(location.longitude)
     }
   }
 

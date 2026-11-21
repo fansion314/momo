@@ -2,17 +2,11 @@ import { useTheme } from 'next-themes'
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { NavigateFunction, useLocation, useNavigate, useRoutes } from 'react-router-dom'
 import OutboundModeSwitcher from '@renderer/components/sider/outbound-mode-switcher'
-import { Button, Divider, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
-import { IoArrowForward, IoSettings } from 'react-icons/io5'
-import { toast } from '@renderer/components/base/toast'
+import { Button, Divider } from '@heroui/react'
+import { IoSettings } from 'react-icons/io5'
 import routes, { useDeferredRoutePreload } from '@renderer/routes'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import {
-  applyTheme,
-  setNativeTheme,
-  setOperationMode,
-  setTitleBarOverlay
-} from '@renderer/utils/ipc'
+import { applyTheme, setNativeTheme, setTitleBarOverlay } from '@renderer/utils/ipc'
 import { platform } from '@renderer/utils/init'
 import { TitleBarOverlayOptions } from 'electron'
 import { useDnsOverrideAutoDisabledNotice } from '@renderer/hooks/use-dns-override-notice'
@@ -32,87 +26,6 @@ const siderHoverCloseDelay = 400
 
 const siderCardsPromise = import('@renderer/components/sider/sider-cards')
 const SiderCards = lazy(() => siderCardsPromise)
-/* eslint-disable react/prop-types */
-
-const ModeSelection: React.FC<{ onSelect: (mode: 'standard' | 'simple') => Promise<void> }> = ({
-  onSelect
-}) => {
-  const { t, i18n } = useTranslation()
-  const [selectingMode, setSelectingMode] = useState<'standard' | 'simple' | null>(null)
-  const selecting = useRef(false)
-  return (
-    <Modal
-      isOpen
-      hideCloseButton
-      isDismissable={false}
-      isKeyboardDismissDisabled
-      size="lg"
-      scrollBehavior="inside"
-    >
-      <ModalContent dir={i18n.dir()}>
-        {(close) => (
-          <>
-            <ModalHeader className="px-6 pt-6 pb-2 text-xl leading-snug wrap-break-word">
-              {t('settings.operationMode.select.title')}
-            </ModalHeader>
-            <ModalBody className="gap-5 px-6 pt-0 pb-6">
-              <p className="text-small leading-relaxed text-default-500">
-                {t('settings.operationMode.select.description')}
-              </p>
-              <div className="flex shrink-0 flex-col gap-3" aria-busy={selectingMode !== null}>
-                {(['standard', 'simple'] as const).map((mode) => (
-                  <Button
-                    key={mode}
-                    variant="flat"
-                    color={mode === 'simple' ? 'primary' : 'default'}
-                    className="h-auto min-h-24 w-full min-w-0 shrink-0 justify-start gap-4 border border-default-200 px-4 py-4 whitespace-normal"
-                    aria-labelledby={`operation-mode-${mode}-label`}
-                    aria-describedby={`operation-mode-${mode}-description`}
-                    isDisabled={selectingMode !== null}
-                    isLoading={selectingMode === mode}
-                    onPress={async () => {
-                      if (selecting.current) return
-                      selecting.current = true
-                      setSelectingMode(mode)
-                      try {
-                        await onSelect(mode)
-                        close()
-                      } catch (error) {
-                        toast.error(String(error), t('settings.operationMode.error'))
-                      } finally {
-                        selecting.current = false
-                        setSelectingMode(null)
-                      }
-                    }}
-                  >
-                    <span className="flex min-w-0 flex-1 flex-col gap-1.5 text-start wrap-break-word">
-                      <span id={`operation-mode-${mode}-label`} className="text-base font-semibold">
-                        {t(`settings.operationMode.${mode}.label`)}
-                      </span>
-                      <span
-                        id={`operation-mode-${mode}-description`}
-                        className="text-small leading-relaxed text-foreground-500"
-                      >
-                        {t(`settings.operationMode.${mode}.description`)}
-                      </span>
-                    </span>
-                    <IoArrowForward
-                      aria-hidden="true"
-                      className="shrink-0 text-lg rtl:rotate-180"
-                    />
-                  </Button>
-                ))}
-              </div>
-              <p className="border-t border-default-200 pt-4 text-small leading-relaxed text-pretty text-warning-600 wrap-break-word">
-                {t('settings.operationMode.select.note')}
-              </p>
-            </ModalBody>
-          </>
-        )}
-      </ModalContent>
-    </Modal>
-  )
-}
 
 const FirstContentReady: React.FC = () => {
   const { appConfig } = useAppConfig()
@@ -236,10 +149,10 @@ const App: React.FC = () => {
   }, [patchAppConfig])
 
   useEffect(() => {
-    if (!ready || !hasAppConfig || !appConfig?.modeSelected) return
+    if (!ready || !hasAppConfig) return
     createTourDriver(t, navigate)
     startTourIfNeeded()
-  }, [t, ready, navigate, hasAppConfig, appConfig?.modeSelected])
+  }, [t, ready, navigate, hasAppConfig])
 
   useEffect(() => {
     setNativeTheme(appTheme)
@@ -257,16 +170,6 @@ const App: React.FC = () => {
     window.addEventListener('mouseup', onResizeEnd)
     return (): void => window.removeEventListener('mouseup', onResizeEnd)
   }, [onResizeEnd])
-
-  if (hasAppConfig && !appConfig?.modeSelected) {
-    return (
-      <ModeSelection
-        onSelect={async (mode) => {
-          await setOperationMode(mode)
-        }}
-      />
-    )
-  }
 
   return (
     <div

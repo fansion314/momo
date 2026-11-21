@@ -14,17 +14,13 @@ import {
   Tabs
 } from '@heroui/react'
 import React, { useEffect, useState } from 'react'
-import {
-  createSimpleProxyGroup,
-  getSimpleProxyGroup,
-  saveSimpleProxyGroup
-} from '@renderer/utils/ipc'
+import { createLocalProxyGroup, getLocalProxyGroup, saveLocalProxyGroup } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import {
-  SIMPLE_BUILTIN_OUTBOUNDS,
-  type SimpleObject,
-  type SimpleProxyGroupEditor
-} from '../../../../shared/simple-config'
+  LOCAL_BUILTIN_OUTBOUNDS,
+  type LocalObject,
+  type LocalProxyGroupEditor
+} from '../../../../shared/local-config'
 import GroupMembersEditor from './group-members-editor'
 
 interface Props {
@@ -89,14 +85,14 @@ const strings = (value: unknown): string[] =>
 const GroupEditorModal: React.FC<Props> = (props) => {
   const { name, onClose, onSaved } = props
   const { appConfig } = useAppConfig()
-  const [data, setData] = useState<SimpleProxyGroupEditor>()
-  const [values, setValues] = useState<SimpleObject>({})
+  const [data, setData] = useState<LocalProxyGroupEditor>()
+  const [values, setValues] = useState<LocalObject>({})
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let active = true
-    getSimpleProxyGroup(name)
+    getLocalProxyGroup(name)
       .then((data) => {
         if (!active) return
         setData(data)
@@ -131,7 +127,7 @@ const GroupEditorModal: React.FC<Props> = (props) => {
   const groupName = String(values.name || '').trim()
   const nameError = !groupName
     ? '代理组名称不能为空'
-    : SIMPLE_BUILTIN_OUTBOUNDS.includes(groupName) || groupName === 'GLOBAL'
+    : LOCAL_BUILTIN_OUTBOUNDS.includes(groupName) || groupName === 'GLOBAL'
       ? '不能使用内置出站或 GLOBAL 名称'
       : data?.outbounds.includes(groupName)
         ? data.groupNames.includes(groupName)
@@ -175,7 +171,7 @@ const GroupEditorModal: React.FC<Props> = (props) => {
     setSaving(true)
     setError('')
     try {
-      const group: SimpleObject = { ...values, name: String(values.name || '').trim(), type }
+      const group: LocalObject = { ...values, name: String(values.name || '').trim(), type }
       if (nameError) throw new Error(nameError)
       if (!fallbackOptions.includes(String(group['empty-fallback']))) delete group['empty-fallback']
       for (const [key, label] of numberFields) {
@@ -194,8 +190,8 @@ const GroupEditorModal: React.FC<Props> = (props) => {
         const url = new URL(group.url)
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('检测地址必须使用 http(s)')
       }
-      if (name === undefined) await createSimpleProxyGroup(group)
-      else await saveSimpleProxyGroup(name, group, data.group)
+      if (name === undefined) await createLocalProxyGroup(group)
+      else await saveLocalProxyGroup(name, group, data.group)
       onSaved()
       onClose()
     } catch (error) {

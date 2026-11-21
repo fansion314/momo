@@ -34,10 +34,17 @@ const revision = Number(
   (await readFile('packaging/arch/PKGBUILD', 'utf8')).match(/^pkgrel=(\d+)$/m)[1]
 )
 assert(
-  Number.isSafeInteger(revision) && revision >= 2,
-  'Update acceptance requires a prior package revision'
+  Number.isSafeInteger(revision) && revision >= 1,
+  'Update acceptance requires a positive package revision'
 )
-const fixtureRevision = revision - 1
+const fixtureRevision = revision > 1 ? revision - 1 : 1
+const fixtureVersion =
+  revision > 1
+    ? pkg.version
+    : pkg.version.replace(/(\d+)$/, (patch) => {
+        assert(Number(patch) > 0, 'A first revision fixture requires a prior patch version')
+        return String(Number(patch) - 1)
+      })
 const stem = `clash-momo-${pkg.version}-${revision}-windows-x64`
 const installerPath = path.join(root, 'dist/release', `${stem}-setup.exe`)
 const portablePath = path.join(root, 'dist/release', `${stem}-portable.zip`)
@@ -103,7 +110,7 @@ const windowsPowerShell = path.win32.join(
   'powershell.exe'
 )
 const evidence = {
-  from: `${pkg.version}-${fixtureRevision}`,
+  from: `${fixtureVersion}-${fixtureRevision}`,
   to: `${pkg.version}-${revision}`,
   productionSource: packageManifest.source_commit,
   tests: [],
@@ -266,7 +273,7 @@ async function attachFixture(executable, sourceName = 'cnb') {
   )
   await waitFor(
     () => invoke(page, 'windowsUpdateState'),
-    (value) => value.currentRevision === fixtureRevision,
+    (value) => value.currentVersion === fixtureVersion && value.currentRevision === fixtureRevision,
     'Fixture revision'
   )
   return page
@@ -358,10 +365,16 @@ try {
     path.join(source, 'src/shared/windows-update-keys.json'),
     JSON.stringify({ [keyId]: publicKey })
   )
+  await writeFile(
+    path.join(source, 'package.json'),
+    JSON.stringify({ ...pkg, version: fixtureVersion }, null, 2) + '\n'
+  )
   const recipe = path.join(source, 'packaging/arch/PKGBUILD')
   await writeFile(
     recipe,
-    (await readFile(recipe, 'utf8')).replace(/^pkgrel=\d+$/m, `pkgrel=${fixtureRevision}`)
+    (await readFile(recipe, 'utf8'))
+      .replace(/^pkgrel=\d+$/m, `pkgrel=${fixtureRevision}`)
+      .replace(/^pkgver=.*$/m, `pkgver=${fixtureVersion}`)
   )
   await run(
     process.execPath,
@@ -467,7 +480,7 @@ try {
   const fixtureInstaller = path.join(
     source,
     'dist/windows',
-    `clash-momo-${pkg.version}-${fixtureRevision}-windows-x64-setup.exe`
+    `clash-momo-${fixtureVersion}-${fixtureRevision}-windows-x64-setup.exe`
   )
   const encodedInstall = Buffer.from(
     JSON.stringify({ installer: fixtureInstaller, directory: installDir })
@@ -598,7 +611,9 @@ try {
   trackLauncher()
   await checkpoint('verify upgraded client, configuration and history')
   page = await application.firstWindow()
-  assert.equal((await invoke(page, 'windowsUpdateState')).currentRevision, revision)
+  const upgradedState = await invoke(page, 'windowsUpdateState')
+  assert.equal(upgradedState.currentVersion, pkg.version)
+  assert.equal(upgradedState.currentRevision, revision)
   await waitFor(
     () => invoke(page, 'trafficHistoryStatus'),
     (value) => value.ready && value.healthy,

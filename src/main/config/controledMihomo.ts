@@ -9,9 +9,19 @@ import { deepMerge } from '../utils/merge'
 import { createLogger } from '../utils/logger'
 import { atomicWriteFile, WriteQueue } from '../utils/safeFile'
 import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConfig'
-import { SIMPLE_SHARED_CONFIG_KEYS } from '../../shared/simple-config'
-import type { SimpleSharedConfig } from '../simple/compiler'
+import {
+  isLocalProfile,
+  LOCAL_GENERAL_CONFIG_KEYS,
+  LOCAL_SHARED_CONFIG_KEYS
+} from '../../shared/local-config'
+import type { LocalSharedConfig } from '../local/compiler'
 import { getAppConfig, patchAppConfig } from './app'
+
+async function isLocalProfileActive(): Promise<boolean> {
+  const { getProfileConfig, getProfileItem } = await import('./profile')
+  const { current } = await getProfileConfig()
+  return isLocalProfile(await getProfileItem(current))
+}
 
 const controledMihomoLogger = createLogger('ControledMihomo')
 
@@ -54,31 +64,37 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
   }
   if (typeof controledMihomoConfig !== 'object')
     controledMihomoConfig = cloneDefaultControledMihomoConfig()
-  if ((await getAppConfig()).operationMode === 'simple') {
-    const { getSimpleState } = await import('../simple/store')
-    const state = await getSimpleState()
-    const simpleConfig: Partial<IMihomoConfig> = {}
+  if (await isLocalProfileActive()) {
+    const { getLocalState } = await import('../local/store')
+    const state = await getLocalState()
+    const localConfig: Partial<IMihomoConfig> = {}
     try {
       const general = parse(state.published.modules.general)
       if (general && typeof general === 'object' && !Array.isArray(general)) {
-        Object.assign(simpleConfig, general)
+        Object.assign(localConfig, general)
       }
     } catch (error) {
-      controledMihomoLogger.warn('Failed to parse simple general module', error)
+      controledMihomoLogger.warn('Failed to parse local general module', error)
     }
-    for (const key of SIMPLE_SHARED_CONFIG_KEYS) {
+    for (const key of LOCAL_GENERAL_CONFIG_KEYS) {
+      const value = controledMihomoConfig[key]
+      if (value !== undefined) {
+        ;(localConfig as Record<string, unknown>)[key] = structuredClone(value)
+      }
+    }
+    for (const key of LOCAL_SHARED_CONFIG_KEYS) {
       const value = controledMihomoConfig[key]
       if (value !== undefined && !['dns', 'hosts', 'tun', 'sniffer'].includes(key)) {
-        ;(simpleConfig as Record<string, unknown>)[key] = structuredClone(value)
+        ;(localConfig as Record<string, unknown>)[key] = structuredClone(value)
       }
     }
     for (const module of ['dns', 'hosts', 'tun', 'sniffer'] as const) {
       const value = controledMihomoConfig[module]
       if (value && typeof value === 'object' && !Array.isArray(value)) {
-        ;(simpleConfig as Record<string, unknown>)[module] = structuredClone(value)
+        ;(localConfig as Record<string, unknown>)[module] = structuredClone(value)
       }
     }
-    return simpleConfig
+    return localConfig
   }
   return controledMihomoConfig
 }
@@ -86,9 +102,9 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
 export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>): Promise<void> {
   await controledMihomoWriteQueue.run(async () => {
     const appConfig = await getAppConfig()
-    if (appConfig.operationMode === 'simple') {
-      const { patchSimpleModules } = await import('../simple/service')
-      await patchSimpleModules(patch)
+    if (await isLocalProfileActive()) {
+      const { patchLocalModules } = await import('../local/service')
+      await patchLocalModules(patch)
       if (patch['log-level']) await startMihomoLogs()
       return
     }
@@ -192,11 +208,11 @@ export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>):
   })
 }
 
-// Called inside the simple configuration write queue; preserve all standard-only fields.
-export async function writeSimpleSharedConfig(shared: SimpleSharedConfig): Promise<void> {
+// Called inside the local configuration write queue; preserve all file-config-only fields.
+export async function writeLocalSharedConfig(shared: LocalSharedConfig): Promise<void> {
   if (!controledMihomoConfig) await getControledMihomoConfig(true)
   const next = structuredClone(controledMihomoConfig || cloneDefaultControledMihomoConfig())
-  for (const key of SIMPLE_SHARED_CONFIG_KEYS) {
+  for (const key of LOCAL_SHARED_CONFIG_KEYS) {
     if (shared[key] === undefined) delete next[key]
     else (next as Record<string, unknown>)[key] = structuredClone(shared[key])
   }

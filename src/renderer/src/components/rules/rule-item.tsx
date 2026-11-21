@@ -3,7 +3,7 @@ import { MdEdit } from 'react-icons/md'
 import React, { useState, useEffect } from 'react'
 import { mihomoRulesDisable } from '@renderer/utils/ipc'
 import { useTranslation } from 'react-i18next'
-import DeleteResourceButton from '../simple/delete-resource-button'
+import DeleteResourceButton from '../local/delete-resource-button'
 
 interface RuleItemProps extends IMihomoRulesDetail {
   index: number
