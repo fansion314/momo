@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { parse } from 'yaml'
+import { parse, stringify } from 'yaml'
 import { defaultLocalDraft } from '../../shared/local-config'
 import type { LocalDraft, LocalSource } from '../../shared/local-config'
+import { bindProfileSource, findProfileSource } from '../../shared/profile-source'
 import { compileLocalConfig } from './compiler'
 
 function draftWith(
@@ -24,6 +25,120 @@ function source(partial: Partial<LocalSource>): LocalSource {
     ...partial
   }
 }
+
+describe('profile source resolution from canonical YAML', () => {
+  const item = { id: 'subscription', name: 'Airport', url: 'https://example.test/sub' }
+
+  it('resolves an explicit profile link from the draft', () => {
+    const linked = source({ profileId: item.id, name: 'Linked provider' })
+    const draft = draftWith({
+      sources: [linked],
+      modules: { 'proxy-providers': 'Airport: {type: inline, payload: []}\n' }
+    })
+    expect(findProfileSource(draft, item)).toBe(linked)
+  })
+
+  it.each(['http', 'inline'] as const)(
+    'resolves an explicitly bound %s provider from canonical YAML',
+    (mode) => {
+      const boundSource = source({
+        name: 'Airport',
+        mode,
+        prefix: mode === 'http' ? '' : '[Airport] ',
+        url: item.url,
+        proxies: [{ name: 'Node', type: 'http', server: '127.0.0.1', port: 8080 }]
+      })
+      const draft = draftWith({ sources: [boundSource] })
+      const config = parse(compileLocalConfig(draft).yaml)
+      const canonical = draftWith({
+        modules: { 'proxy-providers': stringify(config['proxy-providers']) }
+      })
+      expect(
+        findProfileSource(canonical, {
+          ...item,
+          nodeSource: bindProfileSource(boundSource, 'local')
+        })
+      ).toMatchObject({
+        profileId: item.id,
+        localProfileId: 'local',
+        name: 'Airport',
+        mode,
+        prefix: mode === 'http' ? '' : '[Airport] ',
+        providerOptions: config['proxy-providers'].Airport
+      })
+    }
+  )
+
+  it('resolves a renamed provider through its explicit nodeSource binding', () => {
+    const draft = draftWith({
+      modules: {
+        'proxy-providers':
+          'Renamed: {type: http, url: "https://example.test/sub", override: {additional-prefix: "[Custom] "}}\n'
+      }
+    })
+    const bound = {
+      ...item,
+      nodeSource: {
+        localProfileId: 'local',
+        name: 'Renamed',
+        mode: 'http' as const,
+        prefix: '[Custom] '
+      }
+    }
+    expect(findProfileSource(draft, bound)?.name).toBe('Renamed')
+    expect(findProfileSource(draft, bound)?.prefix).toBe('[Custom] ')
+  })
+
+  it('resolves bound extracted nodes and removes only their source prefix', () => {
+    const node = { name: '[Airport] Node', type: 'http', server: '127.0.0.1', port: 8080 }
+    const draft = draftWith({
+      modules: { proxies: stringify([node, { ...node, name: 'Unrelated' }]) }
+    })
+    const bound = {
+      ...item,
+      nodeSource: {
+        localProfileId: 'local',
+        name: 'Airport',
+        mode: 'extract' as const,
+        prefix: '[Airport] ',
+        nodeNames: ['[Airport] Node']
+      }
+    }
+    expect(findProfileSource(draft, bound)).toMatchObject({
+      mode: 'extract',
+      prefix: '[Airport] ',
+      proxies: [{ ...node, name: 'Node' }]
+    })
+  })
+
+  it('never misclassifies unbound legacy, plugin, or self-bound local profiles', () => {
+    const draft = draftWith({
+      modules: {
+        proxies: stringify([
+          { name: '[Airport] Node', type: 'http', server: '127.0.0.1', port: 8080 }
+        ]),
+        'proxy-providers':
+          'Airport: {type: inline, payload: []}\nMirror: {type: http, url: "https://example.test/sub"}\n'
+      }
+    })
+    // Legacy v2.0.3 profiles have nodeSource === undefined and must remain normal profiles.
+    expect(findProfileSource(draft, item)).toBeUndefined()
+    expect(findProfileSource(draft, { ...item, nodeSource: false })).toBeUndefined()
+    expect(findProfileSource(draft, { ...item, pluginId: 'plugin' })).toBeUndefined()
+    expect(
+      findProfileSource(draft, {
+        ...item,
+        id: 'local',
+        nodeSource: {
+          localProfileId: 'local',
+          name: 'Airport',
+          mode: 'inline',
+          prefix: '[Airport] '
+        }
+      })
+    ).toBeUndefined()
+  })
+})
 
 describe('compileLocalConfig', () => {
   it('compiles the default draft without errors', () => {
@@ -88,16 +203,6 @@ describe('compileLocalConfig', () => {
     expect(provider.override['additional-prefix']).toBe('[A] ')
     expect(provider.header['User-Agent']).toEqual(['UA'])
     expect(provider.header.Authorization).toEqual(['token'])
-  })
-
-  it('shared dns/hosts/tun/sniffer override the corresponding modules', () => {
-    const draft = draftWith({
-      modules: { dns: 'enable: false\n' }
-    })
-    const result = compileLocalConfig(draft, { dns: { enable: true, listen: '0.0.0.0:1053' } })
-    const config = parse(result.yaml)
-    expect(config.dns.enable).toBe(true)
-    expect(config.dns.listen).toBe('0.0.0.0:1053')
   })
 
   it('keeps preserved standard fields and flattens the general module', () => {

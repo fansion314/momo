@@ -15,6 +15,8 @@ const dataDir = path.join(os.homedir(), 'Library/Application Support/clash-momo'
 assert(!existsSync(dataDir), 'Refusing to alter existing app data')
 const helperSocket = '/Library/PrivilegedHelperTools/world.fansionia.clash-momo.ipc/helper.sock'
 const group = '🚀 节点/选择'
+const subscriptionGroup = 'Imported subscription group'
+const subscriptionName = 'Imported subscription fixture'
 const secret = 'disposable-ci-controller-token'
 let application
 let panelServer
@@ -67,6 +69,7 @@ enableHttpPort: false
 enableRedirPort: false
 enableTproxyPort: false
 autoUpdateProfileOnStart: false
+useHotReloadProfile: true
 autoCheckUpdate: false
 useSubStore: false
 autoCloseConnection: false
@@ -87,7 +90,15 @@ tproxy-port: 0
   )
   await writeFile(
     path.join(dataDir, 'profile.yaml'),
-    'current: fixture\nitems:\n  - id: fixture\n    type: local\n    name: macOS regression fixture\n'
+    `current: fixture
+items:
+  - id: fixture
+    type: local
+    name: macOS regression fixture
+  - id: subscription
+    type: remote
+    name: ${subscriptionName}
+`
   )
   await writeFile(
     path.join(dataDir, 'profiles/fixture.yaml'),
@@ -98,6 +109,15 @@ proxy-groups:
   - name: ${JSON.stringify(group)}
     type: select
     proxies: [节点 A, 节点 B]
+rules: ["MATCH,DIRECT"]
+`
+  )
+  await writeFile(
+    path.join(dataDir, 'profiles/subscription.yaml'),
+    `proxies:
+  - {name: subscription-node, type: direct}
+proxy-groups:
+  - {name: ${subscriptionGroup}, type: select, proxies: [subscription-node]}
 rules: ["MATCH,DIRECT"]
 `
   )
@@ -131,6 +151,30 @@ rules: ["MATCH,DIRECT"]
   )
   await mkdir('dist/validation', { recursive: true })
   await page.screenshot({ path: 'dist/validation/macos-proxy-selection.png' })
+  await page.evaluate(() => {
+    location.hash = '/profiles'
+  })
+  const profileCards = page.locator('.content').getByRole('heading', { level: 3 })
+  const subscriptionCard = profileCards.filter({ hasText: subscriptionName })
+  await subscriptionCard.click({ timeout: 30000 })
+  await waitFor(
+    () => invoke(page, 'mihomoProxies'),
+    (value) => value.proxies?.[subscriptionGroup]?.now === 'subscription-node',
+    'Renderer subscription switch applied to the core'
+  )
+  await waitFor(
+    () => subscriptionCard.getAttribute('class', { timeout: 1000 }),
+    (value) => value?.split(/\s+/).includes('text-primary-foreground'),
+    'Active subscription card highlight'
+  )
+  assert.equal((await invoke(page, 'getProfileConfig')).current, 'subscription')
+  await page.screenshot({ path: 'dist/validation/macos-subscription-selection.png' })
+  await profileCards.filter({ hasText: 'macOS regression fixture' }).click({ timeout: 30000 })
+  await waitFor(
+    () => invoke(page, 'mihomoProxies'),
+    (value) => value.proxies?.[group],
+    'Renderer switched back to the original profile'
+  )
   const headers = { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' }
   assert.equal((await fetch(`${controller}/version`)).status, 401)
   assert.equal((await fetch(`${controller}/version`, { headers })).status, 200)
@@ -229,6 +273,7 @@ rules: ["MATCH,DIRECT"]
     JSON.stringify(
       {
         rendererSelection: true,
+        subscriptionSelection: true,
         onboardingDismissed: true,
         externalPanelSelection: true,
         cors: true,

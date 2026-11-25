@@ -1,6 +1,5 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { defaultLocalDraft } from '../../shared/local-config'
 import { parse } from '../utils/yaml'
 
 const mocks = vi.hoisted(() => ({
@@ -9,8 +8,7 @@ const mocks = vi.hoisted(() => ({
     enableTrafficLogger: true,
     trafficHistoryRetentionDays: 30
   } as IAppConfig,
-  write: vi.fn(),
-  localCompile: vi.fn()
+  write: vi.fn()
 }))
 const workDir = path.join('/tmp', 'clash-momo-history-tests', 'work')
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
@@ -31,15 +29,17 @@ vi.mock('../utils/dirs', () => ({
   mihomoProfileWorkDir: (id: string) => path.join('/tmp', 'clash-momo-history-tests', 'work', id),
   mihomoWorkConfigPath: (id: string) =>
     path.join('/tmp', 'clash-momo-history-tests', 'work', id, 'config.yaml'),
-  localConfigPath: () => '/tmp/clash-momo-history-tests/simple.yaml',
-  localOutputPath: () => '/tmp/clash-momo-history-tests/simple.generated.yaml',
   overridePath: vi.fn(),
   rulePath: () => '/tmp/clash-momo-history-tests/rules.yaml'
 }))
 vi.mock('../config', () => ({
   getAppConfig: async () => mocks.config,
   getProfileConfig: async () => ({ current: 'profile-one' }),
-  getProfileItem: async () => ({ override: [] }),
+  getProfileItem: async (id: string) => ({
+    id,
+    type: id === 'local-fixture' ? 'local' : 'remote',
+    override: []
+  }),
   getProfile: async () => ({
     'log-level': 'info',
     'proxy-groups': [],
@@ -52,11 +52,8 @@ vi.mock('../config', () => ({
   getOverride: vi.fn(),
   getOverrideItem: vi.fn()
 }))
-vi.mock('../config/app', () => ({ getAppConfig: async () => mocks.config }))
 vi.mock('../utils/logger', () => ({ createLogger: () => ({ info: vi.fn(), error: vi.fn() }) }))
 vi.mock('../utils/age', () => ({ decryptAgeContent: vi.fn() }))
-vi.mock('../local/service', () => ({ compileLocalRuntime: () => mocks.localCompile() }))
-vi.mock('../local/subscriptions', () => ({ resolveLocalDraft: async (draft: unknown) => draft }))
 vi.mock('./dnsOverrideGuard', () => ({
   evaluateDnsOverrideGuard: () => ({
     controlDns: false,
@@ -110,16 +107,10 @@ describe('native history config in actual profile producers', () => {
     })
   })
 
-  it('injects the same application settings after local profile compilation', async () => {
-    const { compileAndWriteLocal } = await import('../local/store')
-    const draft = defaultLocalDraft()
-    draft.preserved = {
-      ...draft.preserved,
-      'traffic-history': { enable: false, path: '/tmp/wrong.db' }
-    }
-    const state = { version: 2 as const, revision: 0, draft, published: structuredClone(draft) }
-    const preview = await compileAndWriteLocal(state, true, {})
-    expect(preview.errors).toEqual([])
+  it('applies the same history settings when loading a local profile', async () => {
+    const { generateProfile } = await import('./factory')
+    const options = { profileId: 'local-fixture' }
+    await generateProfile(undefined, options)
     expect(lastWrittenHistory()).toMatchObject({
       enable: true,
       path: path.join(workDir, 'traffic-history.db'),
@@ -127,7 +118,7 @@ describe('native history config in actual profile producers', () => {
     })
     mocks.config.enableTrafficLogger = false
     mocks.config.trafficHistoryRetentionDays = 45
-    await compileAndWriteLocal(state, true, {})
+    await generateProfile(undefined, options)
     expect(lastWrittenHistory()).toMatchObject({ enable: false, 'retention-days': 45 })
   })
 })
