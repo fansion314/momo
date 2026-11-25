@@ -175,9 +175,21 @@ rules: ["MATCH,DIRECT"]
     (value) => value.proxies?.[group],
     'Renderer switched back to the original profile'
   )
-  const headers = { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' }
-  assert.equal((await fetch(`${controller}/version`)).status, 401)
-  assert.equal((await fetch(`${controller}/version`, { headers })).status, 200)
+  const headers = {
+    Authorization: `Bearer ${secret}`,
+    'Content-Type': 'application/json',
+    Connection: 'close'
+  }
+  await waitFor(
+    async () => (await fetch(`${controller}/version`, { headers: { Connection: 'close' } })).status,
+    (status) => status === 401,
+    'Public listener rejects unauthenticated requests after the switch'
+  )
+  await waitFor(
+    async () => (await fetch(`${controller}/version`, { headers })).status,
+    (status) => status === 200,
+    'Public listener accepts authenticated requests after the switch'
+  )
   // A separate Chromium window has no Electron preload or Node integration. Its
   // different HTTP origin exercises a real external panel's CORS and WebSocket.
   panelServer = http.createServer((_req, res) => {
@@ -297,7 +309,11 @@ rules: ["MATCH,DIRECT"]
     .catch(() => {})
   await writeFile(
     'dist/validation/macos-controller-failure.json',
-    JSON.stringify({ error: String(error) }, null, 2) + '\n'
+    JSON.stringify(
+      { error: error.stack ?? String(error), cause: String(error.cause ?? '') },
+      null,
+      2
+    ) + '\n'
   )
   throw error
 } finally {
