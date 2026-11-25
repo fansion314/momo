@@ -1,6 +1,7 @@
 import { constants } from 'fs'
 import { copyFile, readFile, rm } from 'fs/promises'
 import path from 'path'
+import { isDeepStrictEqual } from 'util'
 import { resources } from '../../shared/i18n'
 import {
   defaultLocalDraft,
@@ -34,6 +35,20 @@ async function readOptional(file: string): Promise<string | undefined> {
 
 function isWrappedLocalConfig(content: string): boolean {
   return /^draft:|^published:/m.test(content)
+}
+
+function isUnusedLegacyTemplate(content: string): boolean {
+  if (!isWrappedLocalConfig(content)) return false
+  try {
+    const legacy = parseYaml(content)
+    const draft = defaultLocalDraft()
+    const draftWithModuleOrder = { ...draft, moduleOrder: Object.keys(draft.modules) }
+    return [draft, draftWithModuleOrder].some((template) =>
+      isDeepStrictEqual(legacy, { version: 2, revision: 0, draft: template, published: template })
+    )
+  } catch {
+    return false
+  }
 }
 
 function defaultLocalProfileName(language: unknown): string {
@@ -133,16 +148,19 @@ export async function migrateLocalProfiles(): Promise<void> {
   )
   const [current, previous, localState, simpleState, localGenerated, simpleGenerated] =
     await Promise.all([target, oldProfile, ...oldConfigs, ...oldGenerated].map(readOptional))
+  const legacyState = [localState, simpleState]
+    .map((content, index) =>
+      content === undefined ? undefined : { file: oldConfigs[index], content }
+    )
+    .find(
+      (source) =>
+        source && (local || legacy || activateLocal || !isUnusedLegacyTemplate(source.content))
+    )
   const contentSource: LegacyFile | undefined =
     current !== undefined
       ? { file: target, content: current }
-      : localState !== undefined
-        ? { file: oldConfigs[0], content: localState }
-        : simpleState !== undefined
-          ? { file: oldConfigs[1], content: simpleState }
-          : previous !== undefined
-            ? { file: oldProfile, content: previous }
-            : undefined
+      : (legacyState ??
+        (previous !== undefined ? { file: oldProfile, content: previous } : undefined))
   const content = contentSource?.content
   const generatedSources: LegacyFile[] = [
     localGenerated !== undefined ? { file: oldGenerated[0], content: localGenerated } : undefined,

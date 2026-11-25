@@ -3,6 +3,7 @@ import { tmpdir } from 'os'
 import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import yaml from 'yaml'
+import { defaultLocalDraft } from '../../shared/local-config'
 
 let dataDir = ''
 
@@ -169,6 +170,30 @@ describe('local migration', () => {
     const profileConfig = yaml.parse(readFileSync(path.join(dataDir, 'profile.yaml'), 'utf-8'))
     expect(profileConfig.items.some((item: { id?: string }) => item.id === 'local')).toBe(false)
     expect(profileConfig.current).toBeUndefined()
+  })
+
+  it('keeps ordinary subscriptions untouched when upgrading an unused simple-mode template', async () => {
+    const profilePath = path.join(dataDir, 'profile.yaml')
+    const profiles = yaml.stringify({
+      current: 'ordinary',
+      items: [{ id: 'ordinary', type: 'local', name: 'Ordinary subscription' }]
+    })
+    writeFileSync(profilePath, profiles)
+    writeFileSync(
+      path.join(dataDir, 'config.yaml'),
+      yaml.stringify({ core: 'mihomomo', operationMode: 'standard' })
+    )
+    const defaults = defaultLocalDraft()
+    const draft = { ...defaults, moduleOrder: Object.keys(defaults.modules) }
+    writeFileSync(
+      path.join(dataDir, 'simple-config.yaml'),
+      yaml.stringify({ version: 2, revision: 0, draft: structuredClone(draft), published: draft })
+    )
+    const { initBasic } = await import('./init')
+    await initBasic()
+
+    expect(readFileSync(profilePath, 'utf8')).toBe(profiles)
+    expect(existsSync(path.join(dataDir, 'profiles', 'local.yaml'))).toBe(false)
   })
 
   it('keeps the original YAML and active selection when a local profile is already migrated', async () => {
